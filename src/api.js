@@ -153,13 +153,14 @@ async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF) {
     }
   }
   let tasksSortByProfit = _.sortBy(worthTasks, task => -task.profitePercent)
-  fs.writeFileSync('./temp_tasksSortByProfit.js', 'module.exports = ' +
+  fs.writeFileSync('./savedData/temp_tasksSortByProfit.js', 'module.exports = ' +
     util.inspect(tasksSortByProfit), 'utf-8')
-  console.log('worthTasks', worthTasks)
+  console.log('tasksSortByProfit', tasksSortByProfit)
   return tasksSortByProfit
 }
 
 async function makeTrade (trade) {
+  /** Initialization */
   const {
     symbol,
     buyFrom,
@@ -168,12 +169,16 @@ async function makeTrade (trade) {
     sellPrice,
     profitePercent
   } = trade
+
+  let currencySymbol = 'BTC'
   let targetSymbol = symbol.split('/')[0]
-  const enableRateLimit = true
-  const verbose = false
   let srcId = 'binance'
   let buyFromId = buyFrom
   let sellToId = sellTo
+
+  const enableRateLimit = true
+  const verbose = false
+
   let srcExchange = new ccxt[srcId](
     ccxt.extend({enableRateLimit, verbose}, credentials[srcId]))
 
@@ -183,85 +188,114 @@ async function makeTrade (trade) {
   let sellToExchange = new ccxt[sellToId](
     ccxt.extend({enableRateLimit, verbose}, credentials[sellToId]))
 
+  /** pre-check potential problems */
+  if (!srcExchange.apiKey || !buyFromExchange.apiKey ||
+    !sellToExchange.apiKey) {
+    throw new Error('makeTrade initialization error')
+  }
+
+  let requiredMethods = [
+    srcExchange.fetchDepositAddress,
+    buyFromExchange.fetchDepositAddress,
+    sellToExchange.fetchDepositAddress,
+    srcExchange.withdraw,
+    buyFromExchange.withdraw,
+    sellToExchange.withdraw,
+    buyFromExchange.createMarketBuyOrder,
+    sellToExchange.createMarketSellOrder,
+  ]
+
+  if (!_.every(requiredMethods, item => !!item)) {
+    console.log(`buyFromExchange or sellToExchange lack methods: ${buyFromId}, ${sellToId}`)
+    return
+  }
+
+  let srcBTCAddress = (await srcExchange.fetchDepositAddress(currencySymbol)).address
+  console.log('srcBTCAddress', srcId, srcBTCAddress)
+  let buyFromAddress = (await buyFromExchange.fetchDepositAddress(currencySymbol)).address
+  console.log('buyFromAddress', buyFromId, buyFromAddress)
+  let sellToAddress = (await sellToExchange.fetchDepositAddress(targetSymbol)).address
+  console.log('sellToAddress', sellToId, sellToAddress)
+
+  /** Start trading */
   try {
-    // check the balance
-    if (!srcExchange.apiKey || !buyFromExchange.apiKey ||
-      !sellToExchange.apiKey) {
-      throw new Error('makeTrade initialization error')
-    }
+
+    /** Check BTC balance - source exchange */
     let balance = await srcExchange.fetchBalance()
-    let currency = 'BTC'
-    console.log(srcExchange.id, `${currency} balance ${balance['free'][currency]}`)
+    let srcBtcAmount = balance['free'][currencySymbol]
+    console.log(srcExchange.id, `${currencySymbol} balance ${srcBtcAmount}`)
 
-    //    // withdraw - BTC from binance to wherever
-    let withdrawBTCAmount = 0.005
-    let toBTCAddress = '149Zhnmertkcwzt6UVRnwcna2fCT1z49E9'
-    //    let result = await srcExchange.withdraw('BTC', withdrawBTCAmount, toBTCAddress, {name: `${buyFromId} address`})
-    //
-    //    console.log('withDrawResult', result)
+    /** Transfer BTC from source exchange to buyFrom exchange */
+    if (buyFromId !== srcId) {
+      console.log(`transfer ${currencySymbol} from ${srcId} to ${buyFromId}`)
+      let srcWithdrawResult = await srcExchange.withdraw(currencySymbol, srcBtcAmount, buyFromAddress, {name: `${buyFromId} address`})
+      console.log('transfer BTC result', srcWithdrawResult)
+    }
 
-//    //  fetchBalance
-//    await waitForWithdrawComplete(buyFromExchange, withdrawBTCAmount)
-//    console.log(
-//      `Withdraw ${withdrawBTCAmount} BTC from ${srcId} to ${buyFromId} complete`)
+    /** Wait for the transfer to complete */
+    let buyFromBTCAmount = await waitForWithdrawComplete(buyFromExchange, srcBtcAmount, currencySymbol)
+    console.log(`Withdraw BTC from ${srcId} to ${buyFromId} complete`)
+    console.log(`${srcBtcAmount} transferred, ${buyFromBTCAmount} received`)
 
-//    let buyFromBalance = await buyFromExchange.fetchBalance()
-//    console.log('buyFromBalance balance', buyFromBalance)
-
-//    //  createOrder - buy
-//    let maxAmount = withdrawBTCAmount / purchasePrice
-//    console.log('symbol', symbol, 'maxAmount', maxAmount)
-//    let purchaseResult = await buyFromExchange.createMarketBuyOrder(symbol, maxAmount*0.1)
+    /** Buy target currency at buyFrom exchange*/
+    let maxAmount = buyFromBTCAmount / purchasePrice
+    console.log('symbol', symbol, 'maxAmount', maxAmount)
+//    let purchaseResult = await buyFromExchange.createMarketBuyOrder(symbol, maxAmount * 0.2)
 //    console.log('purchaseResult', purchaseResult)
+    /** Todo handle buy fail or not filled */
 
-//    // get address to send coin for selling
-//    console.log('sellSymbol', targetSymbol)
-//    let sellToAddress = await sellToExchange.fetchDepositAddress(targetSymbol)
-//    console.log('sellToAddress', sellToAddress)
-//
-//    if (sellToAddress.status !== 'ok') {
-//      throw new Error(`Can not get coin address for ${targetSymbol}`)
-//    }
+    /** Check target currency balance at buyFrom exchange*/
+    let boughtAmount = (await buyFromExchange.fetchBalance())['free'][targetSymbol]
+    console.log('boughtAmount', boughtAmount)
 
-    // check filled balance
-//    console.log('buyFromExchange', Object.keys(buyFromExchange))
-//    console.log('buyFromExchange', buyFromExchange)
-    let boughtBalance = await buyFromExchange.fetchBalance()//['free'][targetSymbol]
-    console.log('boughtBalance', boughtBalance)
+    /** Transfer target currency to sellToExchange */
+    let buyFromWithdrawResult = await buyFromExchange.withdraw(targetSymbol, boughtAmount, sellToAddress, {name: `${sellToId} address`})
+    console.log('Transfer target currency to sellToExchange', buyFromWithdrawResult)
 
-    // Transfer target symbol currency to sellToExchange
-//    let result = await buyFromExchange.withdraw(targetSymbol, withdrawBTCAmount, toBTCAddress, {name: `${buyFromId} address`})
+    /** Wait for the transfer to complete */
+    let sellToTargetAmount = await waitForWithdrawComplete(sellToExchange, boughtAmount, targetSymbol)
+    console.log(`Withdraw ${targetSymbol} from ${buyFromId} to ${sellToId} complete`)
+    console.log(`${boughtAmount} transferred, ${sellToTargetAmount} received`)
 
+    /** Sell target currency for BTC at sellTo exchange */
+    console.log('symbol', symbol, 'targetAmount', sellToTargetAmount)
+    let sellResult = await sellToExchange.createMarketSellOrder(symbol, sellToTargetAmount)
+    console.log('sellResult', sellResult)
 
-//    console.log(srcExchange.id, `${currency} balance ${balance['free'][currency]}`)
-//
-//    let result = await buyFromExchange.withdraw(sellSymbol, withdrawBTCAmount, toBTCAddress, {name: `${buyFromId} address`})
-//
-//    console.log('withDrawResult', result)
+    /** Check BTC balance at sellTo exchange */
+    await sleep(2000)
+    let sellToBTCAmount = (await sellToExchange.fetchBalance())['free']['BTC']
+    console.log('sellToBTCAmount', sellToBTCAmount)
 
-    //  createOrder - sell
-    //  createOrder (symbol, type, side, amount[, price[, params]])
+    /** transfer BTC back to source exchange */
+    if (sellToId !== srcId) {
+      console.log(`transfer ${currencySymbol} from ${sellToId} to ${srcId}`)
+      let sellToWithdrawResult = await sellToExchange.withdraw(currencySymbol, sellToBTCAmount, srcBTCAddress, {name: `${sellToId} address`})
+      console.log('sellToWithdrawResult', sellToWithdrawResult)
+    }
 
-    //  fetchOpenOrders
-
-    //  exchange.withdraw (currency, amount, address, params = {})
+    /** Wait for the transfer to complete */
+    let srcBTCAmountNew = await waitForWithdrawComplete(srcExchange, sellToBTCAmount, currencySymbol)
+    console.log(`Withdraw BTC from ${sellToId} to ${srcId} complete`)
+    console.log(`${sellToBTCAmount} transferred, ${srcBTCAmountNew} received`)
   }
   catch (e) {
     handleError(e)
   }
 }
 
-async function waitForWithdrawComplete (exchange, amount) {
+async function waitForWithdrawComplete (exchange, amount, symbol='BTC') {
+  log('waiting for withdraw to complete'.green)
   return new Promise(async (resolve, reject) => {
     let maxTry = 1000
     let counter = 0
     while (counter < maxTry) {
       counter++
-      await sleep(10 * 1000)
       let balance = await exchange.fetchBalance()
-      if (balance['free']['BTC'] >= amount - 0.001) {
-        return resolve()
+      if (balance['free'][symbol] >= amount * 0.8) {
+        return resolve(balance['free'][symbol])
       }
+      await sleep(10 * 1000)
     }
     return reject('max try exceeded')
   })

@@ -31,6 +31,15 @@ let human_value = function (price) {
   return typeof price == 'undefined' ? 'N/A' : price
 }
 
+let getExchangeTicker = (ticker, exchange) => {
+  return {
+//    ...ticker
+    price: (ticker.bid + ticker.ask) / 2,
+    timestamp: ticker.timestamp,
+    vwap: ticker.vwap,
+    exchangeId: exchange.id,
+  }
+}
 
 async function fetchTickers (exchange) {
   try {
@@ -38,32 +47,45 @@ async function fetchTickers (exchange) {
 
     await exchange.loadMarkets()
 
-    for (let symbol of exchange.symbols) {
-      if ((symbol.indexOf('.d') < 0)) { // skip darkpool symbols
-        await api.sleep(exchange.rateLimit)
-        let ticker = await exchange.fetchTicker(symbol)
-        console.log(`Fetched ${symbol} from ${exchange.id} with rateLimit: ${exchange.rateLimit}`)
+    /** fetch all tickers together */
+    console.log(exchange.id, 'exchange.hasFetchTickers', exchange.hasFetchTickers)
+    if (exchange.hasFetchTickers) {
+      let tickers = await exchange.fetchTickers()
+//      log(tickers)
 
-        let exchangeTicker = {
-//          ...ticker,
-          price: (ticker.bid + ticker.ask) / 2,
-          timestamp: ticker.timestamp,
-          vwap: ticker.vwap,
-          exchangeId: exchange.id,
-        }
-
+      Object.keys(tickers).forEach(key => {
+        let ticker = tickers[key]
+        let exchangeTicker = getExchangeTicker(ticker, exchange)
         if (tickersBySymbol[ticker.symbol]) {
           tickersBySymbol[ticker.symbol].push(exchangeTicker)
         } else {
           tickersBySymbol[ticker.symbol] = [exchangeTicker]
         }
+      })
+    }
+    /** fetch ticker one by one if exchange doesn't have fetchTickers method */
+    else {
+      for (let symbol of exchange.symbols) {
+        if ((symbol.indexOf('.d') < 0)) { // skip darkpool symbols
+          await api.sleep(exchange.rateLimit)
+          let ticker = await exchange.fetchTicker(symbol)
+          console.log(`Fetched ${symbol} from ${exchange.id} with rateLimit: ${exchange.rateLimit}`)
+
+          let exchangeTicker = getExchangeTicker(ticker, exchange)
+
+          if (tickersBySymbol[ticker.symbol]) {
+            tickersBySymbol[ticker.symbol].push(exchangeTicker)
+          } else {
+            tickersBySymbol[ticker.symbol] = [exchangeTicker]
+          }
+        }
+        //      break; // used for dev to avoid being throttled
       }
-//      break; // used for dev to avoid being throttled
     }
   }
 
   catch (e) {
-    api.handleError(e, exchange)
+    api.handleError(e)
   }
 }
 
@@ -94,7 +116,7 @@ async function fetchTickers (exchange) {
 //
 //  }
 //  let tasksSortByProfit = _.sortBy(worthTasks, task => -task.profitePercent)
-//  fs.writeFileSync('./temp_worthTasks.js', 'module.exports = ' + util.inspect(worthTasks) , 'utf-8')
+//  fs.writeFileSync('./savedData/temp_worthTasks.js', 'module.exports = ' + util.inspect(worthTasks) , 'utf-8')
 //  console.log('worthTasks', worthTasks)
 //}
 
@@ -106,12 +128,10 @@ async function main () {
 
   const ids = ccxt.exchanges.filter (id => id in credentials)
 
-  // instantiate all exchanges
-//    await Promise.all(ccxt.exchanges.map(async id => {
+  /** instantiate all exchanges */
+//  await Promise.all(ccxt.exchanges.map(async id => {
   await Promise.all(ids.map(async id => {
 //    let exchange = new (ccxt)[id]()
-
-    // instantiate the exchange
     let exchange = new ccxt[id] (ccxt.extend ({ enableRateLimit }, credentials[id]))
 
     exchanges.push(exchange)
@@ -120,8 +140,8 @@ async function main () {
 
   // get Potential Trades
   let tickersSortedByPrice = api.sortByPrice(tickersBySymbol)
-  fs.writeFileSync('./temp_tickersBySymbol.js', 'module.exports = ' + util.inspect(tickersBySymbol) , 'utf-8')
-  fs.writeFileSync('./temp_tickersSortedByPrice.js', 'module.exports = ' + util.inspect(tickersSortedByPrice) , 'utf-8')
+  fs.writeFileSync('./savedData/temp_tickersBySymbol.js', 'module.exports = ' + util.inspect(tickersBySymbol) , 'utf-8')
+  fs.writeFileSync('./savedData/temp_tickersSortedByPrice.js', 'module.exports = ' + util.inspect(tickersSortedByPrice) , 'utf-8')
   let potentialTrades = await api.getPotentialTrades(tickersSortedByPrice, PRICE_DIFF)
 
 //  await api.makeTrade(trade)

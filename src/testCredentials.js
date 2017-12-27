@@ -7,9 +7,10 @@ async function fetchBalance(exchangeId){
 
   let balance = await exchange.fetchBalance()
   if (balance['free'] && !isNaN(balance['free']['BTC'])) {
-    console.log(`${exchangeId} credential is working: BTC balance is ${balance['free']['BTC']}`)
+    console.log(`${exchangeId} credential is working: BTC balance is ${balance['free']['BTC']}, hasFetchOrderBook: ${exchange.hasFetchOrderBook}`)
+//    console.log(`${exchangeId} hasFetchOrderBook: ${exchange.hasFetchOrderBook}`)
   } else {
-    console.log(exchangeId, balance)
+    console.log(exchangeId, balance, 'hasFetchOrderBook: ', exchange.hasFetchOrderBook)
 //    console.log(`${exchangeId} credential abnormal: `, Object.keys(balance))
   }
 }

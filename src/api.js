@@ -53,23 +53,28 @@ const largePriceDiff = (a, b, percentage) => {
   }
 }
 
-const weightedPrice = (priceAmountList) => {
+const weightedPrice = (priceAmountList, BTCVol=0.1) => {
   let amount = 0
   let totalPrice = 0
-  priceAmountList.forEach(priceAmountPair => {
-    totalPrice += priceAmountPair[0] * priceAmountPair[1]
-    amount += priceAmountPair[1]
-  })
+  let accumulatedBTCVol = 0
+  for (let [price, vol] of priceAmountList) {
+    accumulatedBTCVol += price * vol
+    totalPrice += price * vol
+    amount += vol
+
+    if (accumulatedBTCVol > BTCVol) break
+  }
+  log(`accumulatedBTCVol ${accumulatedBTCVol}, totalPrice / amount ${totalPrice / amount}`.green)
   return totalPrice / amount
 }
 
-async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF) {
+async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1) {
   let worthTasks = []
-  for (let tickerKey of Object.keys(tickersSortedByPrice)) {
+  for (let symbol of Object.keys(tickersSortedByPrice)) {
 
-    if (!tickerKey.endsWith('/BTC')) continue
+    if (!symbol.endsWith('/BTC')) continue
 
-    let exchangePrices = tickersSortedByPrice[tickerKey]
+    let exchangePrices = tickersSortedByPrice[symbol]
     let lowIndex = 0
     let highIndex = exchangePrices.length - 1
 
@@ -77,85 +82,94 @@ async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF) {
     largePriceDiff(exchangePrices[highIndex], exchangePrices[lowIndex],
       PRICE_DIFF)) {
 
+      if (exchangePrices[highIndex].dayVolInBTC < 50 || exchangePrices[lowIndex].dayVolInBTC < 50) {
+        break
+      }
+
       if (exchangePrices[highIndex].price >
-        exchangePrices[lowIndex].price * 2) {
+        exchangePrices[lowIndex].price * 3) {
         lowIndex++
         highIndex--
         continue
       }
 
-      worthTasks.push({
-        symbol: tickerKey,
-        buyFrom: exchangePrices[lowIndex].exchangeId,
-        purchasePrice: exchangePrices[lowIndex].price,
-        sellTo: exchangePrices[highIndex].exchangeId,
-        sellPrice: exchangePrices[highIndex].price,
-        profitePercent: (exchangePrices[highIndex].price -
-          exchangePrices[lowIndex].price) / exchangePrices[lowIndex].price
-      })
-      break
-      //      let buyExchange = new (ccxt)[exchangePrices[lowIndex].exchangeId]()
-      //      let sellExchange = new (ccxt)[exchangePrices[highIndex].exchangeId]()
-      //
-      //      if (!buyExchange.hasFetchOrderBook) {
-      //        lowIndex++
-      //        continue
-      //      }
-      //
-      //      if (!sellExchange.hasFetchOrderBook) {
-      //        highIndex--
-      //        continue
-      //      }
-      //
-      //      console.log(buyExchange.id, sellExchange.id)
-      //
-      //      try{
-      //        const buyFromOrders = await buyExchange.fetchOrderBook (tickerKey, {
-      //          'limit_bids': 10, // max = 50
-      //          'limit_asks': 10, // may be 0 in which case the array is empty
-      //          'group': 1, // 1 = orders are grouped by price, 0 = orders are separate
-      //        })
-      //
-      //        const sellToOrders = await sellExchange.fetchOrderBook (tickerKey, {
-      //          'limit_bids': 10, // max = 50
-      //          'limit_asks': 10, // may be 0 in which case the array is empty
-      //          'group': 1, // 1 = orders are grouped by price, 0 = orders are separate
-      //        })
-      //
-      //        console.log(`Fetched ${tickerKey} (${weightedPrice(buyFromOrders.asks)}) and (${weightedPrice(sellToOrders.bids)})`)
-      ////        console.log(`Fetched ${tickerKey} from ${buyExchange.id}(${weightedPrice(buyFromOrders.asks)}) and ${sellExchange.id}(${weightedPrice(sellToOrders.bids)})`)
-      //
-      //        if (largePriceDiff(weightedPrice(buyFromOrders.asks), weightedPrice(sellToOrders.bids), PRICE_DIFF)) {
-      //          // found task
-      //          worthTasks.push({
-      //            symbol: tickerKey,
-      //            buyFrom: exchangePrices[lowIndex].exchangeId,
-      //            purchasePrice: exchangePrices[lowIndex].price,
-      //            sellTo: exchangePrices[highIndex].exchangeId,
-      //            sellPrice: exchangePrices[highIndex].price,
-      //            profitePercent: (exchangePrices[highIndex].price - exchangePrices[lowIndex].price) / exchangePrices[lowIndex].price
-      //          })
-      //          console.log('saving')
-      //          break
-      //        } else { // change index
-      //          let buyPriceDiff = weightedPrice(buyFromOrders.asks) - exchangePrices[lowIndex].price
-      //          let sellPriceDiff = exchangePrices[highIndex].price - weightedPrice(sellToOrders.bids)
-      //          if (buyPriceDiff > sellPriceDiff) {
-      //            lowIndex++
-      //          } else {
-      //            highIndex--
-      //          }
-      //        }
-      //      }
-      //      catch (e) {
-      //        handleError(e)
-      //      }
+      /** simple strategy based on price only */
+//
+//      worthTasks.push({
+//        symbol: symbol,
+//        buyFrom: exchangePrices[lowIndex].exchangeId,
+//        purchasePrice: exchangePrices[lowIndex].price,
+//        sellTo: exchangePrices[highIndex].exchangeId,
+//        sellPrice: exchangePrices[highIndex].price,
+//        profitePercent: (exchangePrices[highIndex].price -
+//          exchangePrices[lowIndex].price) / exchangePrices[lowIndex].price
+//      })
+//
+//      break
+
+      /** strategy based on order book */
+      let buyExchange = new (ccxt)[exchangePrices[lowIndex].exchangeId]()
+      let sellExchange = new (ccxt)[exchangePrices[highIndex].exchangeId]()
+
+      if (!buyExchange.hasFetchOrderBook) {
+        lowIndex++
+        continue
+      }
+
+      if (!sellExchange.hasFetchOrderBook) {
+        highIndex--
+        continue
+      }
+
+//      console.log(buyExchange.id, sellExchange.id)
+
+      try{
+        const buyFromOrders = await buyExchange.fetchOrderBook (symbol)
+        const sellToOrders = await sellExchange.fetchOrderBook (symbol)
+
+        let weightedBuy = weightedPrice(buyFromOrders.asks, BTCVol) || exchangePrices[lowIndex].price
+        let weightedSell = weightedPrice(sellToOrders.bids, BTCVol) || exchangePrices[highIndex].price
+
+        log(`Fetched ${symbol} weightedBuy(${weightedBuy}) and weightedSell(${weightedSell})`.cyan)
+//        console.log(`Fetched ${symbol} from ${buyExchange.id}(${weightedPrice(buyFromOrders.asks)}) and ${sellExchange.id}(${weightedPrice(sellToOrders.bids)})`)
+
+        if (largePriceDiff(weightedBuy, weightedSell, PRICE_DIFF)) {
+          // found task
+          worthTasks.push({
+            symbol: symbol,
+            buyFrom: exchangePrices[lowIndex].exchangeId,
+            buyPrice: exchangePrices[lowIndex].price,
+            sellTo: exchangePrices[highIndex].exchangeId,
+            sellPrice: exchangePrices[highIndex].price,
+            asks: JSON.stringify(buyFromOrders.asks.slice(0,5)),
+            profitPercent: (exchangePrices[highIndex].price - exchangePrices[lowIndex].price) / exchangePrices[lowIndex].price,
+            weightedBuyPrice: weightedBuy,
+            weightedSellPrice: weightedSell,
+            weightedProfitPercent: (weightedSell - weightedBuy) / weightedBuy,
+            bids: JSON.stringify(buyFromOrders.bids.slice(0,5)),
+          })
+          console.log('saving')
+          break
+        } else { // change index
+          // 哪个与实际销售价差的大，就变哪个index
+          let buyPriceDiff = weightedBuy - exchangePrices[lowIndex].price
+          let sellPriceDiff = exchangePrices[highIndex].price - weightedSell
+          if (buyPriceDiff > sellPriceDiff) {
+            lowIndex++
+          } else {
+            highIndex--
+          }
+        }
+      }
+      catch (e) {
+        handleError(e)
+      }
     }
   }
   let tasksSortByProfit = _.sortBy(worthTasks, task => -task.profitePercent)
   fs.writeFileSync('./savedData/temp_tasksSortByProfit.js', 'module.exports = ' +
     util.inspect(tasksSortByProfit), 'utf-8')
-  console.log('tasksSortByProfit', tasksSortByProfit)
+//  console.log('tasksSortByProfit', tasksSortByProfit)
   return tasksSortByProfit
 }
 
@@ -240,8 +254,8 @@ async function makeTrade (trade) {
     /** Buy target currency at buyFrom exchange*/
     let maxAmount = buyFromBTCAmount / purchasePrice
     console.log('symbol', symbol, 'maxAmount', maxAmount)
-//    let purchaseResult = await buyFromExchange.createMarketBuyOrder(symbol, maxAmount * 0.2)
-//    console.log('purchaseResult', purchaseResult)
+    let purchaseResult = await buyFromExchange.createMarketBuyOrder(symbol, maxAmount * 0.3)
+    console.log('purchaseResult', purchaseResult)
     /** Todo handle buy fail or not filled */
 
     /** Check target currency balance at buyFrom exchange*/

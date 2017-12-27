@@ -32,10 +32,10 @@ async function fetchData (exchangeId, symbol, interval = '1m', since = undefined
 
 (async function main () {
   /** params */
-  let exchangeId = 'binance'
-  let fetchingGoal = 30 * 24 * 60
+  let exchangeId = 'huobipro'
+  let fetchingGoal = 30 * 24
   let symbol = 'LTC/USDT'
-  let interval = '1m' // 1m,1h,1d,1M,1y
+  let interval = '1h' // 1m,1h,1d,1M,1y
   let fileName = `${exchangeId}-${symbol.replace('/', '-')}`
 
   /** calc other params based on given ones */
@@ -44,10 +44,12 @@ async function fetchData (exchangeId, symbol, interval = '1m', since = undefined
   let data = []
   if (interval === '1m') {
     fetchRecordNb = 8 * 60
+  } else if (interval === '1h') {
+    fetchRecordNb = 30*24
   }
 
   while (data.length < fetchingGoal) {
-    fetchSince -= fetchRecordNb * 60 * 1000
+    fetchSince -= fetchRecordNb * 60 * 60 * 1000
     let fetchedData = await fetchData(exchangeId, symbol, interval, fetchSince,
       fetchRecordNb)
     data.push(...fetchedData)

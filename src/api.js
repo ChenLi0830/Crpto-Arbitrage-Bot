@@ -53,7 +53,7 @@ const largePriceDiff = (a, b, percentage) => {
   }
 }
 
-const weightedPrice = (priceAmountList, BTCVol=0.1) => {
+const weightedPrice = (priceAmountList, BTCVol=0.01) => {
   let amount = 0
   let totalPrice = 0
   let accumulatedBTCVol = 0
@@ -94,7 +94,7 @@ async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1)
       }
 
       /** simple strategy based on price only */
-//
+
 //      worthTasks.push({
 //        symbol: symbol,
 //        buyFrom: exchangePrices[lowIndex].exchangeId,
@@ -124,6 +124,7 @@ async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1)
 //      console.log(buyExchange.id, sellExchange.id)
 
       try{
+        await sleep(Math.max(buyExchange.rateLimit, sellExchange.rateLimit))
         const buyFromOrders = await buyExchange.fetchOrderBook (symbol)
         const sellToOrders = await sellExchange.fetchOrderBook (symbol)
 
@@ -133,7 +134,7 @@ async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1)
         log(`Fetched ${symbol} weightedBuy(${weightedBuy}) and weightedSell(${weightedSell})`.cyan)
 //        console.log(`Fetched ${symbol} from ${buyExchange.id}(${weightedPrice(buyFromOrders.asks)}) and ${sellExchange.id}(${weightedPrice(sellToOrders.bids)})`)
 
-        if (largePriceDiff(weightedBuy, weightedSell, PRICE_DIFF)) {
+        if (largePriceDiff(weightedSell, weightedBuy, PRICE_DIFF)) {
           // found task
           worthTasks.push({
             symbol: symbol,

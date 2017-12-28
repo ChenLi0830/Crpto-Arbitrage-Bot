@@ -12,8 +12,12 @@ const credentials = require ('../credentials.js')
 require('ansicolor').nice
 
 let tickersBySymbol = []
+let potentialTrades = []
 
+const exchangeBlacklist = ['bitfinex', 'bitfinex2', 'bittrex', 'lakebtc']
+const POTENTIAL_TRADE_FILE = './savedData/temp_tasksSortByProfit.js'
 const PRICE_DIFF = 0.01;
+const BTC_VOLUME = 0.5
 //-----------------------------------------------------------------------------
 
 process.on('uncaughtException', e => {
@@ -26,10 +30,6 @@ process.on('unhandledRejection', e => {
 })
 
 //-----------------------------------------------------------------------------
-
-let human_value = function (price) {
-  return typeof price == 'undefined' ? 'N/A' : price
-}
 
 let updateTickersBySymbol = (ticker, exchange) => {
   let exchangeTicker = getExchangeTicker(ticker, exchange)
@@ -90,9 +90,12 @@ async function fetchTickers (exchange) {
 
     // 每完成一个交易所，就update tickersSortedByPrice
     let tickersSortedByPrice = api.sortByPrice(tickersBySymbol)
-    fs.writeFileSync('./savedData/temp_tickersBySymbol.js', 'module.exports = ' + util.inspect(tickersBySymbol) , 'utf-8')
-    fs.writeFileSync('./savedData/temp_tickersSortedByPrice.js', 'module.exports = ' + util.inspect(tickersSortedByPrice) , 'utf-8')
-    let potentialTrades = await api.getPotentialTrades(tickersSortedByPrice, PRICE_DIFF)
+//    fs.writeFileSync('./savedData/temp_tickersBySymbol.js', 'module.exports = ' + util.inspect(tickersBySymbol) , 'utf-8')
+//    fs.writeFileSync('./savedData/temp_tickersSortedByPrice.js', 'module.exports = ' + util.inspect(tickersSortedByPrice) , 'utf-8')
+    potentialTrades = await api.getPotentialTrades(tickersSortedByPrice, PRICE_DIFF, BTC_VOLUME)
+    if (potentialTrades.length > 0){
+      fs.writeFileSync(POTENTIAL_TRADE_FILE, 'module.exports = ' + util.inspect(potentialTrades), 'utf-8')
+    }
   }
 
   catch (e) {
@@ -100,20 +103,19 @@ async function fetchTickers (exchange) {
   }
 }
 
-async function main () {
+async function fetchTrades() {
 
   let exchanges = []
   const enableRateLimit = true
-  const blacklist = ['bitfinex', 'bitfinex2', 'bittrex', 'lakebtc']
   const ids = ccxt.exchanges.filter (id => id in credentials)
 
   /** instantiate all exchanges */
-  await Promise.all(ccxt.exchanges.map(async id => {
-//  await Promise.all(ids.map(async id => {
-    let exchange = new (ccxt)[id]()
-//    let exchange = new ccxt[id] (ccxt.extend ({ enableRateLimit }, credentials[id]))
+//  await Promise.all(ccxt.exchanges.map(async id => {
+  await Promise.all(ids.map(async id => {
+//    let exchange = new (ccxt)[id]()
+    let exchange = new ccxt[id] (ccxt.extend ({ enableRateLimit }, credentials[id]))
 
-    if (_.includes(blacklist, id)) {
+    if (_.includes(exchangeBlacklist, id)) {
       return
     }
 
@@ -121,13 +123,20 @@ async function main () {
     await fetchTickers(exchange)
   }))
 
-
-
-//  await api.makeTrade(trade)
+  //  await api.makeTrade(trade)
   //  let succeeded = exchanges.filter (exchange => exchange.markets ? true : false).length.toString ().bright.green
   //  let failed = exchanges.filter (exchange => exchange.markets ? false : true).length
   //  let total = ccxt.exchanges.length.toString ().bright.white
   //  console.log (succeeded, 'of', total, 'exchanges loaded', ('(' + failed + ' errors)').red)
 }
 
-main()
+(async () => {
+  while (true) {
+    try{
+      await fetchTrades()
+    }
+    catch (e){
+      api.handleError(e)
+    }
+  }
+})()

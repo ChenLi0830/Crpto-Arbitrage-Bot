@@ -52,33 +52,41 @@ async function useModal (exchange, symbols) {
   let sellCBuyBSellA = a.bids[0][0] > (b.asks[0][0] / c.bids[0][0])
   let buyASellBBuyC = a.asks[0][0] < (b.bids[0][0] / c.asks[0][0])
 
-//  let maxProfit = (a.bids[0][0] - (b.asks[0][0] / c.bids[0][0])) /
-//    (b.asks[0][0] / c.bids[0][0])
-//  log(`opportunity: sellBBuyCSellA, with profit ${maxProfit}`.cyan)
+//  let maxProfit = ((b.bids[0][0] / c.asks[0][0]) - a.asks[0][0]) / a.asks[0][0]
+//  log(`opportunity: buyASellCBuyB, with profit ${maxProfit}`.cyan)
+//  fs.appendFileSync(`./savedData/${exchange.id}.txt`, `opportunity: sellBBuyCSellA, with profit ${maxProfit} \n`)
 
   if (sellCBuyBSellA) {
     let maxProfit = (a.bids[0][0] - (b.asks[0][0] / c.bids[0][0])) /
       (b.asks[0][0] / c.bids[0][0])
     log(`opportunity: sellBBuyCSellA, with profit ${maxProfit}`.cyan)
+
+    fs.appendFileSync(`./savedData/${exchange.id}.txt`, `opportunity: sellBBuyCSellA, with profit ${maxProfit} \n`)
   }
 
   if (buyASellBBuyC) {
     let maxProfit = ((b.bids[0][0] / c.asks[0][0]) - a.asks[0][0]) / a.asks[0][0]
     log(`opportunity: buyASellCBuyB, with profit ${maxProfit}`.cyan)
+    fs.appendFileSync(`./savedData/${exchange.id}.txt`, `opportunity: buyASellCBuyB, with profit ${maxProfit} \n`)
   }
 
 }
 
 /** 三角套利模型 */
 async function main () {
-  let exchangeId = 'huobipro'
-  let symbols = ['LTC/BTC', 'LTC/USDT', 'BTC/USDT']
+  let exchangeId = 'binance'
+//  let symbols = ['LTC/BTC', 'LTC/USDT', 'BTC/USDT']
+//  let symbols = ['TNT/ETH', 'TNT/BTC', 'ETH/BTC']
+//  let symbols = ['XRP/BTC', 'XRP/USDT', 'BTC/USDT']
+  let symbols = ['LTC/ETH', 'LTC/BTC', 'ETH/BTC']
+
   const enableRateLimit = true
 
   let exchange = new ccxt[exchangeId]()
   await exchange.loadMarkets()
 
   while (true) {
+    api.sleep(5*1000) // wait for 5 seconds between each trading
     try {
       await api.sleep(exchange.rateLimit)
       await useModal(exchange, symbols)

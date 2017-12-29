@@ -72,8 +72,9 @@ const weightedPrice = (priceAmountList, BTCVol=0.01) => {
       break
     }
   }
-  log(`accumulatedBTCVol ${accumulatedBTCVol}, totalPrice / amount ${totalPrice / amount}`.green)
-  return {price: totalPrice / amount, tradePrice, accumulatedBTCVol}
+  let price = totalPrice / amount
+  log(`price ${price}, accumulatedBTCVol ${accumulatedBTCVol}`.green)
+  return {price, tradePrice, accumulatedBTCVol}
 }
 
 async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1) {
@@ -138,10 +139,10 @@ async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1)
         const buyFromOrders = await buyExchange.fetchOrderBook (symbol)
         const sellToOrders = await sellExchange.fetchOrderBook (symbol)
 
-        let weightedBuy = weightedPrice(buyFromOrders.asks, BTCVol).price || exchangePrices[lowIndex].price
-        let weightedSell = weightedPrice(sellToOrders.bids, BTCVol).price || exchangePrices[highIndex].price
+        let weightedBuy = weightedPrice(buyFromOrders.asks, BTCVol) //|| exchangePrices[lowIndex].price
+        let weightedSell = weightedPrice(sellToOrders.bids, BTCVol) //|| exchangePrices[highIndex].price
 
-        log(`Fetched ${symbol} weightedBuy(${weightedBuy}) and weightedSell(${weightedSell})`.cyan)
+        log(`Fetched ${symbol} weightedBuyPrice(${weightedBuy.price}) and weightedSellPrice(${weightedSell.price})`.cyan)
 
         let enoughVol = weightedBuy.accumulatedBTCVol >= BTCVol && weightedSell.accumulatedBTCVol >= BTCVol
 //        console.log(`Fetched ${symbol} from ${buyExchange.id}(${weightedPrice(buyFromOrders.asks)}) and ${sellExchange.id}(${weightedPrice(sellToOrders.bids)})`)
@@ -157,9 +158,9 @@ async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1)
             asks: JSON.stringify(buyFromOrders.asks.slice(0,5)),
             askVol: weightedBuy.accumulatedBTCVol,
             profitPercent: (exchangePrices[highIndex].price - exchangePrices[lowIndex].price) / exchangePrices[lowIndex].price,
-            weightedBuyPrice: weightedBuy,
-            weightedSellPrice: weightedSell,
-            weightedProfitPercent: (weightedSell - weightedBuy) / weightedBuy,
+            weightedBuyPrice: weightedBuy.price,
+            weightedSellPrice: weightedSell.price,
+            weightedProfitPercent: (weightedSell.price - weightedBuy.price) / weightedBuy.price,
             bids: JSON.stringify(sellToOrders.bids.slice(0,5)),
             bidVol: weightedSell.accumulatedBTCVol,
           })
@@ -197,12 +198,18 @@ async function checkTradeBenefit(buyExchange, sellExchange, symbol, BTCVol){
   let weightedBuy = weightedPrice(buyFromOrders.asks, BTCVol)
   let weightedSell = weightedPrice(sellToOrders.bids, BTCVol)
 
-  log(`---    Fetched ${symbol} tradeBuy(${weightedBuy.tradePrice}) and weightedSell(${weightedSell.tradePrice})`.green)
-  //        console.log(`Fetched ${symbol} from ${buyExchange.id}(${weightedPrice(buyFromOrders.asks)}) and ${sellExchange.id}(${weightedPrice(sellToOrders.bids)})`)
-  let weightedProfit = (weightedSell - weightedBuy) / weightedBuy
+  log(`---    Fetched ${symbol} tradeBuy(${JSON.stringify(weightedBuy)})`.green)
+  log(`---    Fetched ${symbol} weightedSell(${JSON.stringify(weightedSell)})`.green)
 
+  let weightedProfit = (weightedSell.price - weightedBuy.price) / weightedBuy.price
+  if (weightedBuy.accumulatedBTCVol < BTCVol) {
+    throw new MinorError(`weightedBuy doesn't have enough volume ${weightedBuy.accumulatedBTCVol} < ${BTCVol}`)
+  }
+  if (weightedSell.accumulatedBTCVol < BTCVol) {
+    throw new MinorError(`weightedSell doesn't have enough volume ${weightedSell.accumulatedBTCVol} < ${BTCVol}`)
+  }
   log(`------ Checking Current Benefit of the Trade ------`, '\n')
-  return {weightedSell, weightedBuy, weightedProfit}
+  return {sellPrice: weightedSell.tradePrice, buyPrice: weightedBuy.tradePrice, weightedProfit}
 }
 
 async function checkPotentialProblems(srcExchange, buyFromExchange, sellToExchange){
@@ -247,9 +254,7 @@ async function fetchAddress(params){
   let {
     symbol,
     buyFrom,
-    purchasePrice,
     sellTo,
-    sellPrice,
     profitePercent,
     currencySymbol,
     targetSymbol,
@@ -277,9 +282,7 @@ async function step1(params){
   let {
     symbol,
     buyFrom,
-    purchasePrice,
     sellTo,
-    sellPrice,
     profitePercent,
     currencySymbol,
     targetSymbol,
@@ -294,13 +297,22 @@ async function step1(params){
     sellToAddress
   } = params
 
+  const ExpectedMinProfit = 0.03
+
   log(`------ Step1: Check Src Exchange Balance ------`)
   let balance = await srcExchange.fetchBalance({'recvWindow': 60*10*1000})
   let srcBtcAmount = balance['free'][currencySymbol]
   log(`---    ${srcExchange.id}: ${currencySymbol} balance ${srcBtcAmount}`.green)
   log(`------ Step1: Check Src Exchange Balance ------`, '\n')
 
-  await checkTradeBenifit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
+  srcBtcAmount = 50
+  /** checkTradeBenefit */
+  let {sellPrice, buyPrice, weightedProfit} = await checkTradeBenefit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
+  if (weightedProfit < ExpectedMinProfit) {
+    throw new MinorError('weightedProfit too small')
+  }
+  /** checkTradeBenefit */
+
   await step2({...params, balance, srcBtcAmount})
 }
 
@@ -309,9 +321,7 @@ async function step2(params){
   let {
     symbol,
     buyFrom,
-    purchasePrice,
     sellTo,
-    sellPrice,
     profitePercent,
     currencySymbol,
     targetSymbol,
@@ -349,14 +359,12 @@ async function step2(params){
   await step3({...params, buyFromBTCAmount})
 }
 
-/** Buy target currency at buyFrom exchange*/
+/** Buy target currency at buyFrom exchange */
 async function step3(params){
   let {
     symbol,
     buyFrom,
-    purchasePrice,
     sellTo,
-    sellPrice,
     profitePercent,
     currencySymbol,
     targetSymbol,
@@ -371,14 +379,138 @@ async function step3(params){
     sellToAddress,
     balance,
     srcBtcAmount,
-    buyFromBTC,
+    buyFromBTCAmount,
   } = params
 
-  let maxAmount = buyFromBTCAmount / purchasePrice
-  console.log('symbol', symbol, 'maxAmount', maxAmount)
-  let purchaseResult = await buyFromExchange.createMarketBuyOrder(symbol, maxAmount * 0.3)
-  console.log('purchaseResult', purchaseResult)
-  /** Todo handle buy fail or not filled */
+  /** checkTradeBenefit */
+  const ExpectedMinProfit = 0.03
+  let {sellPrice, buyPrice, weightedProfit} = await checkTradeBenefit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
+  if (weightedProfit < ExpectedMinProfit) {
+    throw new MinorError('weightedProfit too small')
+    //  Todo Transfer BTC back to SRC, and check for next trade
+  }
+  /** checkTradeBenefit */
+
+  try {
+    log(`------ Step3: Buy target currency at buyFrom exchange ------`)
+    let maxAmount = buyFromBTCAmount / buyPrice
+    log(`---    1st time purchase ${symbol} ${maxAmount} - `.green)
+    let purchaseResult = await buyFromExchange.createMarketBuyOrder(symbol, maxAmount)
+    log(`---    1st time purchase result - `.green, purchaseResult)
+
+    log(`---    fetching buyFrom btc balance - `.green)
+    let balance = await buyFromExchange.fetchBalance({'recvWindow': 60*10*1000})
+    buyFromBTCAmount = balance['free'][currencySymbol]
+    log(`-      balance result ${currencySymbol} ${buyFromBTCAmount}`)
+    log(`---    fetching buyFrom btc balance - `.green)
+
+    maxAmount = buyFromBTCAmount / buyPrice
+    log(`---    2nd time purchase ${symbol} ${maxAmount} - `.green)
+    purchaseResult = await buyFromExchange.createMarketBuyOrder(symbol, maxAmount)
+    log(`---    2nd time purchase result - `.green, purchaseResult)
+
+    log(`------ Step3: Buy target currency at buyFrom exchange ------`, '\n')
+  } catch (e) {
+    handleError(e)
+  }
+
+  await step4({...params})
+}
+
+async function step4(params){
+  let {
+    symbol,
+    buyFrom,
+    sellTo,
+    profitePercent,
+    currencySymbol,
+    targetSymbol,
+    srcId,
+    buyFromId,
+    sellToId,
+    srcExchange,
+    buyFromExchange,
+    sellToExchange,
+    srcBTCAddress,
+    buyFromAddress,
+    sellToAddress,
+    balance,
+    srcBtcAmount,
+    buyFromBTCAmount,
+  } = params
+
+  /** Check target currency balance at buyFrom exchange*/
+  let boughtAmount = (await buyFromExchange.fetchBalance())['free'][targetSymbol]
+  console.log('boughtAmount', boughtAmount)
+
+  /** Transfer target currency to sellToExchange */
+  let buyFromWithdrawResult = await buyFromExchange.withdraw(targetSymbol, boughtAmount, sellToAddress, {name: `${sellToId} address`})
+  console.log('Transfer target currency to sellToExchange', buyFromWithdrawResult)
+
+  /** Wait for the transfer to complete */
+  let sellToTargetAmount = await waitForWithdrawComplete(sellToExchange, boughtAmount, targetSymbol)
+  console.log(`Withdraw ${targetSymbol} from ${buyFromId} to ${sellToId} complete`)
+  console.log(`${boughtAmount} transferred, ${sellToTargetAmount} received`)
+
+  await step5({...params, sellToTargetAmount})
+}
+
+async function step5 (params) {
+  let {
+    symbol,
+    buyFrom,
+    sellTo,
+    profitePercent,
+    currencySymbol,
+    targetSymbol,
+    srcId,
+    buyFromId,
+    sellToId,
+    srcExchange,
+    buyFromExchange,
+    sellToExchange,
+    srcBTCAddress,
+    buyFromAddress,
+    sellToAddress,
+    balance,
+    srcBtcAmount,
+    buyFromBTCAmount,
+    sellToTargetAmount,
+  } = params
+
+  /** checkTradeBenefit */
+  const ExpectedMinProfit = -0.03
+  let {sellPrice, buyPrice, weightedProfit} = await checkTradeBenefit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
+  if (weightedProfit < ExpectedMinProfit) {
+    throw new MinorError('weightedProfit too small')
+    // Todo: wait for better profit
+  }
+  /** checkTradeBenefit */
+
+  /** Sell target currency for BTC at sellTo exchange */
+  console.log('symbol', symbol, 'targetAmount', sellToTargetAmount)
+  let sellResult = await sellToExchange.createMarketSellOrder(symbol, sellToTargetAmount)
+  console.log('sellResult', sellResult)
+  await step6({...params})
+}
+
+async function step6(params) {
+
+  /** Check BTC balance at sellTo exchange */
+  let sellToBTCAmount = (await sellToExchange.fetchBalance())['free']['BTC']
+  console.log('sellToBTCAmount', sellToBTCAmount)
+
+  /** transfer BTC back to source exchange */
+  if (sellToId !== srcId) {
+    console.log(`transfer ${currencySymbol} from ${sellToId} to ${srcId}`)
+    let sellToWithdrawResult = await sellToExchange.withdraw(currencySymbol, sellToBTCAmount, srcBTCAddress, {name: `${sellToId} address`})
+    console.log('sellToWithdrawResult', sellToWithdrawResult)
+  }
+
+  /** Wait for the transfer to complete */
+  let srcBTCAmountNew = await waitForWithdrawComplete(srcExchange, sellToBTCAmount, currencySymbol)
+  console.log(`Withdraw BTC from ${sellToId} to ${srcId} complete`)
+  console.log(`${sellToBTCAmount} transferred, ${srcBTCAmountNew} received`)
 }
 
 async function makeTrade (trade) {
@@ -386,9 +518,7 @@ async function makeTrade (trade) {
   const {
     symbol,
     buyFrom,
-    purchasePrice,
     sellTo,
-    sellPrice,
     profitePercent
   } = trade
 
@@ -422,9 +552,7 @@ async function makeTrade (trade) {
       let params = {
         symbol,
         buyFrom,
-        purchasePrice,
         sellTo,
-        sellPrice,
         profitePercent,
         currencySymbol,
         targetSymbol,
@@ -437,41 +565,6 @@ async function makeTrade (trade) {
       }
       await fetchAddress(params)
 
-//
-//      /** Check target currency balance at buyFrom exchange*/
-//      let boughtAmount = (await buyFromExchange.fetchBalance())['free'][targetSymbol]
-//      console.log('boughtAmount', boughtAmount)
-//
-//      /** Transfer target currency to sellToExchange */
-//      let buyFromWithdrawResult = await buyFromExchange.withdraw(targetSymbol, boughtAmount, sellToAddress, {name: `${sellToId} address`})
-//      console.log('Transfer target currency to sellToExchange', buyFromWithdrawResult)
-//
-//      /** Wait for the transfer to complete */
-//      let sellToTargetAmount = await waitForWithdrawComplete(sellToExchange, boughtAmount, targetSymbol)
-//      console.log(`Withdraw ${targetSymbol} from ${buyFromId} to ${sellToId} complete`)
-//      console.log(`${boughtAmount} transferred, ${sellToTargetAmount} received`)
-//
-//      /** Sell target currency for BTC at sellTo exchange */
-//      console.log('symbol', symbol, 'targetAmount', sellToTargetAmount)
-//      let sellResult = await sellToExchange.createMarketSellOrder(symbol, sellToTargetAmount)
-//      console.log('sellResult', sellResult)
-//
-//      /** Check BTC balance at sellTo exchange */
-//      await sleep(2000)
-//      let sellToBTCAmount = (await sellToExchange.fetchBalance())['free']['BTC']
-//      console.log('sellToBTCAmount', sellToBTCAmount)
-//
-//      /** transfer BTC back to source exchange */
-//      if (sellToId !== srcId) {
-//        console.log(`transfer ${currencySymbol} from ${sellToId} to ${srcId}`)
-//        let sellToWithdrawResult = await sellToExchange.withdraw(currencySymbol, sellToBTCAmount, srcBTCAddress, {name: `${sellToId} address`})
-//        console.log('sellToWithdrawResult', sellToWithdrawResult)
-//      }
-//
-//      /** Wait for the transfer to complete */
-//      let srcBTCAmountNew = await waitForWithdrawComplete(srcExchange, sellToBTCAmount, currencySymbol)
-//      console.log(`Withdraw BTC from ${sellToId} to ${srcId} complete`)
-//      console.log(`${sellToBTCAmount} transferred, ${srcBTCAmountNew} received`)
     }
     catch (e) {
       handleError(e)

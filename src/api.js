@@ -8,6 +8,7 @@ require('ansicolor').nice
 const credentials = require('../credentials.js')
 const {MinorError} = require('./utils/errors')
 const {simulate} = require('./utils')
+let newBalance
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -622,7 +623,6 @@ async function step6(params) {
     let sellToWithdrawResult = params.simulate
       ? await simulate({info: {success: true}}, /*20 * 60*/ 3 *1000)
       : await sellToExchange.withdraw(currencySymbol, sellToBTCAmount, srcBTCAddress, {name: `${sellToId} address`})
-    console.log('sellToWithdrawResult', sellToWithdrawResult)
     log(`---    sellToWithdrawResult `.green, sellToWithdrawResult)
   }
 
@@ -633,6 +633,8 @@ async function step6(params) {
   log(`---    ${sellToBTCAmount} transferred, ${srcBTCAmountNew} received`.green)
   log(`Original srcBtcAmount ${srcBtcAmount}, new srcBTCAmount ${srcBTCAmountNew}`.cyan)
   log(`------ Step6: Transfer BTC Back to Source Exchange ------`, '\n')
+
+  newBalance = srcBTCAmountNew
 }
 
 async function makeTrade (trade) {
@@ -688,7 +690,7 @@ async function makeTrade (trade) {
         simulateBalance: trade.simulateBalance,
       }
       await fetchAddress(params)
-
+      return newBalance
     }
     catch (e) {
       handleError(e)

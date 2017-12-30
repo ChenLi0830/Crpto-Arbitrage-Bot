@@ -227,7 +227,7 @@ async function checkPotentialProblems(srcExchange, buyFromExchange, sellToExchan
   /** pre-check potential problems */
   if (!srcExchange.apiKey || !buyFromExchange.apiKey ||
     !sellToExchange.apiKey) {
-    throw new Error('makeTrade initialization error')
+    throw new MinorError('makeTrade initialization error')
   }
 
   /** Check if exchange has all methods */
@@ -249,7 +249,7 @@ async function checkPotentialProblems(srcExchange, buyFromExchange, sellToExchan
     ]
     methods.forEach((method, index) => log(`${method}: ${requiredMethods[index]}`))
 
-    throw new Error(`buyFromExchange or sellToExchange lack methods: ${buyFromExchange.id}, ${sellToExchange.id}`)
+    throw new MinorError(`buyFromExchange or sellToExchange lack methods: ${buyFromExchange.id}, ${sellToExchange.id}`)
   }
 }
 
@@ -365,7 +365,7 @@ async function step2(params){
     log(`---    transfer ${srcBtcAmount} ${currencySymbol} from ${srcId} to ${buyFromId}`.green)
 
     let srcWithdrawResult = params.simulate
-      ? await simulate({info: {success: true}}, /*20 * 60*/ 3 *1000)
+      ? await simulate({info: {success: true}}, 20 * 60 /*3*/ *1000)
       : await srcExchange.withdraw(currencySymbol, srcBtcAmount, buyFromAddress, {name: `${buyFromId} address`})
 
     log(`---    transfer BTC success: ${step2SuccessStatus}`.green)
@@ -522,7 +522,7 @@ async function step4(params){
   try {
     buyFromWithdrawResult = params.simulate
       //转账费0.001BTC, 卖出了99.9% (还剩0.1%没卖出去), 手续费0.1%,
-      ? await simulate({info: {success: true}}, /*20 * 60*/ 3 *1000)
+      ? await simulate({info: {success: true}}, 20 * 60 /*3*/ *1000)
       : await buyFromExchange.withdraw(targetSymbol, boughtAmount, sellToAddress, {name: `${sellToId} address`})
     log(`---    Transfer target currency to sellToExchange`.green, buyFromWithdrawResult)
     /** Wait for the transfer to complete */
@@ -621,14 +621,14 @@ async function step6(params) {
   if (sellToId !== srcId) {
     log(`---    Transfer ${sellToBTCAmount} ${currencySymbol} from ${sellToId} to ${srcId}`.green)
     let sellToWithdrawResult = params.simulate
-      ? await simulate({info: {success: true}}, /*20 * 60*/ 3 *1000)
+      ? await simulate({info: {success: true}}, 20 * 60 *1000)
       : await sellToExchange.withdraw(currencySymbol, sellToBTCAmount, srcBTCAddress, {name: `${sellToId} address`})
     log(`---    sellToWithdrawResult `.green, sellToWithdrawResult)
   }
 
   /** Wait for the transfer to complete */
   let srcBTCAmountNew = params.simulate
-    ? await simulate(sellToBTCAmount - 0.001, /*20 * 60*/ 3 *1000)
+    ? await simulate(sellToBTCAmount - 0.001, 3 *1000)
     : await waitForWithdrawComplete(srcExchange, sellToBTCAmount, currencySymbol)
   log(`---    ${sellToBTCAmount} transferred, ${srcBTCAmountNew} received`.green)
   log(`Original srcBtcAmount ${srcBtcAmount}, new srcBTCAmount ${srcBTCAmountNew}`.cyan)

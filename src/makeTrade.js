@@ -11,6 +11,7 @@ function logToFile(initialSimulateBalance, content) {
 }
 
 async function main(simulateBalance, logFile){
+  delete require.cache[require.resolve('../savedData/temp_tasksSortByProfit')]//Clear require cache
   const trades = require('../savedData/temp_tasksSortByProfit')
 
   // todo: 比特币数量由键盘输入确定（0.05, 0.15, 0.5, 1.5, 5, 10, 30, 100, 300, 1000）
@@ -61,10 +62,11 @@ async function main(simulateBalance, logFile){
 
 (async () => {
 //  Initial balance
-  let initialSimulateBalance = 0.5
+//  let initialSimulateBalance = 0.5
+  let initialSimulateBalance = process.env.INITIAL_SIMULATE_BALANCE
   let simulateBalance = initialSimulateBalance
   let logFile = `./savedData/simuResult/${initialSimulateBalance}.txt`
-  fs.appendFileSync(
+  fs.writeFileSync(
     logFile,
     `${new Date()} \n initialSimulateBalance ${initialSimulateBalance} \n\n`
   )

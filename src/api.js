@@ -12,13 +12,14 @@ let newBalance
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-const handleError = (e) => {
+const handleError = async (e) => {
   console.error(e)
   if (e instanceof ccxt.DDoSProtection) {
     log.bright.yellow('[DDoS Protection]')
   }
   else if (e instanceof ccxt.RequestTimeout) {
     log.bright.yellow('[Request Timeout]')
+    await sleep(300 * 1000)
   }
   else if (e instanceof ccxt.AuthenticationError) {
     log.bright.yellow('[Authentication Error]')
@@ -180,7 +181,7 @@ async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1)
         }
       }
       catch (e) {
-        handleError(e)
+        await handleError(e)
         break
       }
     }
@@ -293,8 +294,7 @@ async function fetchAddress(params){
     await step1({...params, srcBTCAddress, buyFromAddress, sellToAddress})
 
   } catch(e) {
-    handleError(e)
-    throw new MinorError(`Can't get all addresses`)
+    await handleError(e)
   }
 }
 
@@ -489,7 +489,7 @@ async function step3(params){
     await step4({...params, sellPrice, buyPrice, weightedProfit, weightedBuy, weightedSell})
   } catch (e) {
 //    todo handle recover from purchase
-    handleError(e)
+    await handleError(e)
   }
 }
 
@@ -553,7 +553,7 @@ async function step4(params){
   }
   catch (e) {
     // todo handle error if transfer failed
-//    handleError(e)
+//    await handleError(e)
   }
 
   log(`------ Step4: Transfer target currency to sellToExchange ------`, '\n')
@@ -625,7 +625,7 @@ async function step5 (params) {
 //    }
   }
   catch(e) {
-    handleError(e)
+    await handleError(e)
   }
 
   log(`------ Step5: Sell Target Currency for BTC at sellToExchange ------`, '\n')
@@ -739,7 +739,7 @@ async function makeTrade (trade) {
       return newBalance
     }
     catch (e) {
-      handleError(e)
+      await handleError(e)
     }
 }
 

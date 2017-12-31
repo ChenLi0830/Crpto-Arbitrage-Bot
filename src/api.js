@@ -16,6 +16,7 @@ const handleError = async (e) => {
   console.error(e)
   if (e instanceof ccxt.DDoSProtection) {
     log.bright.yellow('[DDoS Protection]')
+    await sleep(300 * 1000)
   }
   else if (e instanceof ccxt.RequestTimeout) {
     log.bright.yellow('[Request Timeout]')
@@ -139,8 +140,20 @@ async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1)
         let waitTime = Math.max(buyExchange.rateLimit, sellExchange.rateLimit)
         log(`waiting for ${waitTime}`.cyan)
         await sleep(waitTime)
-        const buyFromOrders = await buyExchange.fetchOrderBook (symbol)
-        const sellToOrders = await sellExchange.fetchOrderBook (symbol)
+        let fetchParams = {
+          'limit_bids': 50, // max = 50
+          'limit_asks': 50, // may be 0 in which case the array is empty
+          'group': 1, // 1 = orders are grouped by price, 0 = orders are separate
+        }
+
+        const [buyFromOrders,sellToOrders ] = await Promise.all([
+          buyExchange.fetchL2OrderBook(symbol),
+          sellExchange.fetchL2OrderBook(symbol),
+//          buyExchange.fetchOrderBook(symbol),
+//          sellExchange.fetchOrderBook(symbol),
+//          buyExchange.fetchOrderBook(symbol, fetchParams),
+//          sellExchange.fetchOrderBook(symbol, fetchParams),
+        ])
 
         let weightedBuy = weightedPrice(buyFromOrders.asks, BTCVol) //|| exchangePrices[lowIndex].price
         let weightedSell = weightedPrice(sellToOrders.bids, BTCVol) //|| exchangePrices[highIndex].price
@@ -365,7 +378,8 @@ async function step2(params){
     log(`---    transfer ${srcBtcAmount} ${currencySymbol} from ${srcId} to ${buyFromId}`.green)
 
     let srcWithdrawResult = params.simulate
-      ? await simulate({info: {success: true}}, 20 * 60 /*3*/ *1000)
+//      ? await simulate({info: {success: true}}, 20 * 60 *1000)
+      ? await simulate({info: {success: true}}, 3 * 1000)
       : await srcExchange.withdraw(currencySymbol, srcBtcAmount, buyFromAddress, {name: `${buyFromId} address`})
 
     let step2SuccessStatus = srcWithdrawResult.info.success
@@ -542,7 +556,8 @@ async function step4(params){
   try {
     buyFromWithdrawResult = params.simulate
       //转账费0.001BTC, 卖出了99.9% (还剩0.1%没卖出去), 手续费0.1%,
-      ? await simulate({info: {success: true}}, 20 * 60 /*3*/ *1000)
+//      ? await simulate({info: {success: true}}, 20 * 60 *1000)
+      ? await simulate({info: {success: true}}, 3 *1000)
       : await buyFromExchange.withdraw(targetSymbol, boughtAmount, sellToAddress, {name: `${sellToId} address`})
     log(`---    Transfer target currency to sellToExchange`.green, buyFromWithdrawResult)
     /** Wait for the transfer to complete */
@@ -581,6 +596,11 @@ async function step5 (params) {
     balance,
     srcBtcAmount,
     buyFromBTCAmount,
+    sellPrice,
+    buyPrice,
+    weightedProfit,
+    weightedBuy,
+    weightedSell,
     sellToTargetAmount,
   } = params
 
@@ -590,19 +610,15 @@ async function step5 (params) {
     //  const ExpectedMinProfit = 0.005
   const ExpectedMinProfit = -0.03
   let maxTry = 1000
-  let sellPrice, buyPrice, weightedProfit, weightedBuy, weightedSell
 
+  /** check current selling price */
   for (let i=0 ; i<maxTry; i++){
-    let result = await checkTradeBenefit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
-    sellPrice = result.sellPrice
-    buyPrice = result.buyPrice
-    weightedProfit = result.weightedProfit
-    weightedBuy = result.weightedBuy
-    weightedSell = result.weightedSell
-    if (weightedProfit < ExpectedMinProfit) {
-      log(`---   Trial ${i}: weightedProfit ${weightedProfit} < ExpectedMinProfit ${ExpectedMinProfit}`.green)
-    } else {
+    let sellToOrders = await sellToExchange.fetchOrderBook(symbol)
+    let {price: weightedSell, tradePrice, accumulatedBTCVol} = weightedPrice(sellToOrders.bids, buyFromBTCAmount)
+    if (weightedSell > weightedBuy * (1 + ExpectedMinProfit)) {
       break
+    } else {
+      log(`---   Trial ${i}: weightedProfit ${(weightedSell-weightedBuy)/weightedBuy} < ExpectedMinProfit ${ExpectedMinProfit}`.green)
     }
     await sleep(10*1000)
   }
@@ -656,7 +672,7 @@ async function step6(params) {
     weightedSell,
   } = params
 
-  log(`------ Step6: Transfer BTC Back to Source Exchange ------`, '\n')
+  log(`------ Step6: Transfer BTC Back to Source Exchange ------`)
   /** Check BTC balance at sellTo exchange */
   let sellToBTCAmount = params.simulate
     ? await simulate((sellToTargetAmount * weightedSell) * 0.999, 3000) // 0.1%手续费
@@ -667,7 +683,8 @@ async function step6(params) {
   if (sellToId !== srcId) {
     log(`---    Transfer ${sellToBTCAmount} ${currencySymbol} from ${sellToId} to ${srcId}`.green)
     let sellToWithdrawResult = params.simulate
-      ? await simulate({info: {success: true}}, 20 * 60 *1000)
+//      ? await simulate({info: {success: true}}, 20 * 60 *1000)
+      ? await simulate({info: {success: true}}, 3 *1000)
       : await sellToExchange.withdraw(currencySymbol, sellToBTCAmount, srcBTCAddress, {name: `${sellToId} address`})
     log(`---    sellToWithdrawResult `.green, sellToWithdrawResult)
   }
@@ -677,8 +694,9 @@ async function step6(params) {
     ? await simulate(sellToBTCAmount - 0.001, 3 *1000)
     : await waitForWithdrawComplete(srcExchange, sellToBTCAmount, currencySymbol)
   log(`---    ${sellToBTCAmount} transferred, ${srcBTCAmountNew} received`.green)
-  log(`Original srcBtcAmount ${srcBtcAmount}, new srcBTCAmount ${srcBTCAmountNew}`.cyan)
   log(`------ Step6: Transfer BTC Back to Source Exchange ------`, '\n')
+
+  log(`Trade summary: ${currencySymbol} ${srcBtcAmount} -> ${srcBTCAmountNew}`.cyan)
 
   newBalance = srcBTCAmountNew
 }

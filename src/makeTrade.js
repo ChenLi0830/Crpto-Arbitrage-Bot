@@ -46,7 +46,11 @@ async function main(BtcBalance, logFile, losingCountLimit, losingPercentLimit){
       `\n\n ${new Date()} \n BtcBalance ${BtcBalance} \n trade ${JSON.stringify(trade)} \n`
     )
 
-    let newBtcBalance = await api.makeTrade({...trade, simulate: true, BtcBalance}) || BtcBalance
+    let newBtcBalance = await api.makeTrade({
+      ...trade,
+      simulate: true,
+      simulateBalance: BtcBalance
+    }) || BtcBalance
 
     /** check for balance result */
     if (newBtcBalance < BtcBalance) {
@@ -79,7 +83,9 @@ async function main(BtcBalance, logFile, losingCountLimit, losingPercentLimit){
 //  Initial balance
   /** simulation */
   let initialSimulateBalance = process.env.INITIAL_SIMULATE_BALANCE
-  let BtcBalance = initialSimulateBalance
+  let BtcBalance = isNaN(initialSimulateBalance)
+    ? 0
+    : initialSimulateBalance
   /** simulation */
 
   /** production */

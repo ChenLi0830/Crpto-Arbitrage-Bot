@@ -2,6 +2,9 @@ const tasksSortByProfit = require('../savedData/temp_tasksSortByProfit')
 const api = require('./api')
 const fs = require('fs')
 const util = require('util')
+let losingCount = 0
+const log = require('ololog').configure({locate: false})
+//require('ansicolor').nice
 
 function logToFile(initialSimulateBalance, content) {
   fs.appendFileSync(
@@ -10,7 +13,7 @@ function logToFile(initialSimulateBalance, content) {
   )
 }
 
-async function main(simulateBalance, logFile){
+async function main(BtcBalance, logFile, losingCountLimit, losingPercentLimit){
   delete require.cache[require.resolve('../savedData/temp_tasksSortByProfit')]//Clear require cache
   const trades = require('../savedData/temp_tasksSortByProfit')
 
@@ -36,35 +39,55 @@ async function main(simulateBalance, logFile){
   //  }
 
   for (let trade of trades) {
-    try{
-      console.log('\n\n')
+    console.log('\n\n')
 
-      fs.appendFileSync(
-        logFile,
-        `\n\n ${new Date()} \n simulateBalance ${simulateBalance} \n trade ${JSON.stringify(trade)} \n`
-      )
+    fs.appendFileSync(
+      logFile,
+      `\n\n ${new Date()} \n BtcBalance ${BtcBalance} \n trade ${JSON.stringify(trade)} \n`
+    )
 
-      simulateBalance = await api.makeTrade({...trade, simulate: true, simulateBalance}) || simulateBalance
+    let newBtcBalance = await api.makeTrade({...trade, simulate: true, BtcBalance}) || BtcBalance
 
-      fs.appendFileSync(
-        logFile,
-        `${new Date()} \n new balance ${simulateBalance} \n\n`
-      )
-    } catch (error) {
-      console.error('unusual error', error)
-      log('Stop trading immediately'.red)
-      break
+    /** check for balance result */
+    if (newBtcBalance < BtcBalance) {
+      let lostPercent = Math.trunc(((BtcBalance - newBtcBalance) / BtcBalance) * 100)
+      if (lostPercent > losingPercentLimit){
+        throw new Error(`Exceeded losingPercentLimit ${losingPercentLimit}%: Lost ${lostPercent}% BTC in last trade, current balance ${newBtcBalance} BTC`)
+      }
+      losingCount ++
+    } else {
+      losingCount = 0
     }
+    if (losingCount >= losingCountLimit) {
+      throw new Error(`losing BTC ${losingCount} times in a row`)
+    }
+
+    BtcBalance = newBtcBalance
+
+    fs.appendFileSync(
+      logFile,
+      `${new Date()} \n new balance ${BtcBalance} \n\n`
+    )
+
+    await api.sleep(3*1000)
   }
-  return simulateBalance
+  return BtcBalance
   //  await api.getPotentialTrades(tickersSortedByPrice, PRICE_DIFF)
 }
 
 (async () => {
 //  Initial balance
-//  let initialSimulateBalance = 0.5
+  /** simulation */
   let initialSimulateBalance = process.env.INITIAL_SIMULATE_BALANCE
-  let simulateBalance = initialSimulateBalance
+  let BtcBalance = initialSimulateBalance
+  /** simulation */
+
+  /** production */
+//  Todo: fetch balance and sign to 'BtcBalance'
+  /** production */
+
+  let losingCountLimit = 3
+  let losingPercentLimit = 10
   let logFile = `./savedData/simuResult/${initialSimulateBalance}.txt`
   fs.writeFileSync(
     logFile,
@@ -73,6 +96,14 @@ async function main(simulateBalance, logFile){
 //  fs.writeFileSync(`./savedData/${fileName}.csv`, csv)
 
   while (true) {
-    simulateBalance = await main(simulateBalance, logFile)
+    try {
+      simulateBalance = await main(BtcBalance, logFile, losingCountLimit, losingPercentLimit)
+    }
+    catch (error) {
+      console.error('Major error', error)
+      log(error.message.red)
+      log('Stop trading. Await for admin to determine next step'.red)
+      break
+    }
   }
 })()

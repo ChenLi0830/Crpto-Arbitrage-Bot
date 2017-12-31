@@ -6,7 +6,7 @@ const util = require('util')
 const _ = require('lodash')
 require('ansicolor').nice
 const credentials = require('../credentials.js')
-const {MinorError} = require('./utils/errors')
+const {MinorError, MajorError} = require('./utils/errors')
 const {simulate} = require('./utils')
 let newBalance
 
@@ -317,8 +317,8 @@ async function step1(params){
     sellToAddress
   } = params
 
-//  const ExpectedMinProfit = 0.03
-  const ExpectedMinProfit = -0.1
+  const ExpectedMinProfit = 0.01
+//  const ExpectedMinProfit = -0.1
 
   log(`------ Step1: Check Src Exchange Balance ------`)
   let srcBtcAmount = params.simulate
@@ -330,7 +330,7 @@ async function step1(params){
   /** checkTradeBenefit */
   let {sellPrice, buyPrice, weightedProfit} = await checkTradeBenefit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
   if (weightedProfit < ExpectedMinProfit) {
-    throw new MinorError('weightedProfit too small')
+    throw new MinorError('weightedProfit too small, check next trade')
   }
   /** checkTradeBenefit */
 
@@ -368,10 +368,14 @@ async function step2(params){
       ? await simulate({info: {success: true}}, 20 * 60 /*3*/ *1000)
       : await srcExchange.withdraw(currencySymbol, srcBtcAmount, buyFromAddress, {name: `${buyFromId} address`})
 
+    let step2SuccessStatus = srcWithdrawResult.info.success
+//    log(srcWithdrawResult)
     log(`---    transfer BTC success: ${step2SuccessStatus}`.green)
     if (!step2SuccessStatus) {
       log(`---    error`.green, srcWithdrawResult)
-      throw new MinorError('Withdraw balance failed!')
+      console.log(new MinorError('Withdraw balance from src failed! Retry step 2'))
+      await step2(params)
+      return
     }
 
     buyFromBTCAmount = params.simulate
@@ -413,9 +417,25 @@ async function step3(params){
 
   /** checkTradeBenefit */
 //  const ExpectedMinProfit = 0.005
-  const ExpectedMinProfit = - 0.1
-  let {sellPrice, buyPrice, weightedProfit, weightedBuy, weightedSell} =
-    await checkTradeBenefit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
+  const ExpectedMinProfit = 0.01
+  let maxTry = 10
+  let sellPrice, buyPrice, weightedProfit, weightedBuy, weightedSell
+
+  for (let i=0 ; i<maxTry; i++){
+    let result = await checkTradeBenefit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
+    sellPrice = result.sellPrice
+    buyPrice = result.buyPrice
+    weightedProfit = result.weightedProfit
+    weightedBuy = result.weightedBuy
+    weightedSell = result.weightedSell
+    if (weightedProfit < ExpectedMinProfit) {
+      log(`---   Trial ${i}: weightedProfit ${weightedProfit} < ExpectedMinProfit ${ExpectedMinProfit}`.green)
+    } else {
+      break
+    }
+    await sleep(10*1000)
+  }
+
   if (weightedProfit < ExpectedMinProfit) {
     throw new MinorError('weightedProfit too small')
     //  Todo Transfer BTC back to SRC, and check for next trade
@@ -565,22 +585,48 @@ async function step5 (params) {
   } = params
 
   log(`------ Step5: Sell Target Currency for BTC at sellToExchange ------`)
+
   /** checkTradeBenefit */
-    //  const ExpectedMinProfit = -0.03
-  const ExpectedMinProfit = -0.10
-  let {sellPrice, buyPrice, weightedProfit, weightedSell} = await checkTradeBenefit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
+    //  const ExpectedMinProfit = 0.005
+  const ExpectedMinProfit = -0.03
+  let maxTry = 1000
+  let sellPrice, buyPrice, weightedProfit, weightedBuy, weightedSell
+
+  for (let i=0 ; i<maxTry; i++){
+    let result = await checkTradeBenefit(buyFromExchange, sellToExchange, symbol, srcBtcAmount)
+    sellPrice = result.sellPrice
+    buyPrice = result.buyPrice
+    weightedProfit = result.weightedProfit
+    weightedBuy = result.weightedBuy
+    weightedSell = result.weightedSell
+    if (weightedProfit < ExpectedMinProfit) {
+      log(`---   Trial ${i}: weightedProfit ${weightedProfit} < ExpectedMinProfit ${ExpectedMinProfit}`.green)
+    } else {
+      break
+    }
+    await sleep(10*1000)
+  }
+
   if (weightedProfit < ExpectedMinProfit) {
-    throw new MinorError('weightedProfit too small')
-    // Todo: wait for better profit
+    throw new MajorError(`weightedProfit too small in the last step: ${sellToId} ${targetSymbol}`)
   }
   /** checkTradeBenefit */
 
   /** Sell target currency for BTC at sellTo exchange */
-  log(`---    symbol ${symbol}, targetAmount ${sellToTargetAmount}`.green)
-  let sellResult = params.simulate
-    ? await simulate({status: 'filled'}, 3000)
-    : await sellToExchange.createMarketSellOrder(symbol, sellToTargetAmount)
-  log(`---    sellResult`.green, sellResult)
+  try {
+    log(`---    symbol ${symbol}, targetAmount ${sellToTargetAmount}`.green)
+    let sellResult = params.simulate
+      ? await simulate({status: 'filled'}, 3000)
+      : await sellToExchange.createMarketSellOrder(symbol, sellToTargetAmount)
+    log(`---    sellResult`.green, sellResult)
+
+//  Todo  if (something is wrong with sellResult) {
+////      handle it
+//    }
+  }
+  catch(e) {
+    handleError(e)
+  }
 
   log(`------ Step5: Sell Target Currency for BTC at sellToExchange ------`, '\n')
   await step6({...params, weightedSell})
@@ -669,10 +715,10 @@ async function makeTrade (trade) {
   let sellToExchange = new ccxt[sellToId](
     ccxt.extend({enableRateLimit, verbose}, credentials[sellToId]))
 
-  await checkPotentialProblems(srcExchange, buyFromExchange, sellToExchange)
-
   /** Start trading */
     try {
+      await checkPotentialProblems(srcExchange, buyFromExchange, sellToExchange)
+
       let params = {
         symbol,
         buyFrom,

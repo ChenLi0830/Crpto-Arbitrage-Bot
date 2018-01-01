@@ -4,6 +4,8 @@ const fs = require('fs')
 const util = require('util')
 let losingCount = 0
 const log = require('ololog').configure({locate: false})
+const ccxt = require('ccxt')
+const credentials = require('../credentials')
 //require('ansicolor').nice
 
 function logToFile(initialSimulateBalance, content) {
@@ -13,7 +15,7 @@ function logToFile(initialSimulateBalance, content) {
   )
 }
 
-async function main(BtcBalance, logFile, losingCountLimit, losingPercentLimit){
+async function main(BtcBalance, logFile, losingCountLimit, losingPercentLimit, simulate){
   delete require.cache[require.resolve('../savedData/temp_tasksSortByProfit')]//Clear require cache
   const trades = require('../savedData/temp_tasksSortByProfit')
 
@@ -48,7 +50,7 @@ async function main(BtcBalance, logFile, losingCountLimit, losingPercentLimit){
 
     let newBtcBalance = await api.makeTrade({
       ...trade,
-      simulate: true,
+      simulate,
       simulateBalance: BtcBalance
     }) || BtcBalance
 
@@ -81,29 +83,30 @@ async function main(BtcBalance, logFile, losingCountLimit, losingPercentLimit){
 
 (async () => {
 //  Initial balance
-  /** simulation */
+
+
+  let srcId = 'binance'
+  let srcExchange = new ccxt[srcId](ccxt.extend({enableRateLimit: true}, credentials[srcId]))
+
   let initialSimulateBalance = process.env.INITIAL_SIMULATE_BALANCE
   let BtcBalance = isNaN(initialSimulateBalance)
-    ? 0
-    : initialSimulateBalance
-  /** simulation */
-
-  /** production */
-//  Todo: fetch balance and sign to 'BtcBalance'
-  /** production */
+    ? (await srcExchange.fetchBalance())['free']['BTC'] //production
+    : initialSimulateBalance //simulation
 
   let losingCountLimit = 3
   let losingPercentLimit = 10
-  let logFile = `./savedData/simuResult/${initialSimulateBalance}.txt`
+  let simulate = false
+
+  let logFile = `./savedData/simuResult/${BtcBalance}.txt`
   fs.writeFileSync(
     logFile,
-    `${new Date()} \n initialSimulateBalance ${initialSimulateBalance} \n\n`
+    `${new Date()} \n initialSimulateBalance ${BtcBalance} \n\n`
   )
 //  fs.writeFileSync(`./savedData/${fileName}.csv`, csv)
 
   while (true) {
     try {
-      simulateBalance = await main(BtcBalance, logFile, losingCountLimit, losingPercentLimit)
+      simulateBalance = await main(BtcBalance, logFile, losingCountLimit, losingPercentLimit, simulate)
     }
     catch (error) {
       console.error('Major error', error)

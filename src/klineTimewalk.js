@@ -22,7 +22,7 @@ const KLINE_FILE = './savedData/klines/klines.js'
 const PICKED_TRADE = './savedData/pickedTrade.js'
 
 //-----------------------------------------------------------------------------
-function checkValueCriteria(klines, volumeLine, index) {
+function checkValueCriteria(klines, index) {
   let isFastKlineLarger = (klines[windows[0]][index] > klines[windows[1]][index]) && (klines[windows[0]][index] > klines[windows[2]][index])
   let isMiddleKlineLarger = klines[windows[1]][index] > klines[windows[2]][index]
 
@@ -35,8 +35,8 @@ function checkBuyingCriteria(klines, volumeLine) {
   let currentPoint = lineLength-1
   let prevPoint = lineLength-2
 
-  let nowValueMatchCriteria = checkValueCriteria(klines, volumeLine, currentPoint)
-  let prevValueMatchCriteria = checkValueCriteria(klines, volumeLine, prevPoint)
+  let nowValueMatchCriteria = checkValueCriteria(klines, currentPoint)
+  let prevValueMatchCriteria = checkValueCriteria(klines, prevPoint)
 
   //  log(`nowMatchCriteria`, nowMatchCriteria)
   //  log(`prevMatchCriteria`, prevMatchCriteria)
@@ -48,13 +48,13 @@ function rateCurrency(klines, volumeLine) {
   let fastKline = klines[windows[0]]
   let deriveK = (fastKline[lineLength - 1] - fastKline[lineLength - 2]) / fastKline[lineLength - 2]
   let deriveVolume = (volumeLine[lineLength - 1] - volumeLine[lineLength - 2]) / volumeLine[lineLength - 2]
-  let rate = deriveK * deriveVolume
+  let rate = deriveK * deriveVolume * Math.sqrt(volumeLine[lineLength - 1])
 
-  if (rate < 0 || rate > 100000) {
-    console.log('fastKline[lineLength - 1]', fastKline[lineLength - 1], 'fastKline[lineLength - 2]', fastKline[lineLength - 2])
-    console.log('volumeLine[lineLength - 1]', volumeLine[lineLength - 1], 'volumeLine[lineLength - 2]', volumeLine[lineLength - 2])
-    console.log('deriveK',deriveK, 'deriveVolume', deriveVolume)
-  }
+//  if (rate < 0 || rate > 100000) {
+//    console.log('fastKline[lineLength - 1]', fastKline[lineLength - 1], 'fastKline[lineLength - 2]', fastKline[lineLength - 2])
+//    console.log('volumeLine[lineLength - 1]', volumeLine[lineLength - 1], 'volumeLine[lineLength - 2]', volumeLine[lineLength - 2])
+//    console.log('deriveK',deriveK, 'deriveVolume', deriveVolume)
+//  }
   if (volumeLine[lineLength - 2] === 0) { // 之前没有交易的货币不考虑
     rate = - Infinity
   }
@@ -98,9 +98,31 @@ function pickTradeUpdateFile(newExtractedInfoList){
   }
 }
 
+function isNewTradeBetter(pickedTrade, lastPickedTrade){
+  return !lastPickedTrade || (pickedTrade.rate > lastPickedTrade.rate)
+}
+
+function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
+  if (lastPickedTrade) {
+    let purchasePrice = lastPickedTrade.priceLine.slice(-1)[0]
+    let sellPrice = lastTradeCurrentState.priceLine.slice(-1)[0]
+//    if (purchasePrice > sellPrice) {
+//      log(`${lastPickedTrade.symbol}: purchase ${purchasePrice} -> sell ${sellPrice}`.yellow)
+//    }
+
+    //          lastTradeCurrentState.priceLine.slice(-1)[0]
+
+    let profitPercent = (sellPrice - purchasePrice) / purchasePrice
+    return profitPercent
+  } else {
+    return 0
+  }
+}
+
 function timeWalk(extractedInfoList){
   let shift = 0
-  let BTC = 1
+  let money = 100
+  let lastPickedTrade = null
 
   while (shift + lineLength < 500) {
     let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
@@ -113,10 +135,14 @@ function timeWalk(extractedInfoList){
       /** newVolumes */
       let newVolumes = extractedInfo.volumeLine.slice(shift, shift + lineLength)
 
+      /** newPrices */
+      let newPrices = extractedInfo.priceLine.slice(shift, shift + lineLength)
+
       return {
         ...extractedInfo,
         klines: newKlines,
         volumeLine: newVolumes,
+        priceLine: newPrices,
       }
     })
 
@@ -124,9 +150,40 @@ function timeWalk(extractedInfoList){
     fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
 
     let pickedTrade = pickTradeUpdateFile(newExtractedInfoList)
-    if (pickedTrade) {
-      log('pickedTrade'.blue, pickedTrade.symbol, pickedTrade.rate)
-      log(`${(500 - shift - lineLength) * 15} mins ago from 10:00am`)
+
+    /** determine if sell */
+    let lastTradeCurrentState = lastPickedTrade
+      ? _.find(newExtractedInfoList, {symbol: lastPickedTrade.symbol})
+      : null
+
+    let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState) : 0
+    let lostTooMuch = potentialProfit < -0.03
+    let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.priceLine[lineLength-1] - lastTradeCurrentState.priceLine[lineLength-2])/lastTradeCurrentState.priceLine[lineLength-1] : 0
+    let bigChangeInPrice = recentPriceDiff < -0.03
+    let earnedEnough = potentialProfit > 0.10
+    let noLongerGoodTrade = lastPickedTrade
+      ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1 )
+      : false
+
+    /** determine if change */
+    let newTradeIsBetter = pickedTrade
+      ? isNewTradeBetter(pickedTrade, lastPickedTrade)
+      : false
+
+    /** make changes */
+    if (lostTooMuch || earnedEnough || bigChangeInPrice || noLongerGoodTrade || newTradeIsBetter) {
+      log(`earnedEnough ${earnedEnough} bigChangeInPrice ${bigChangeInPrice } lostTooMuch ${lostTooMuch} noLongerGoodTrade ${noLongerGoodTrade} || newTradeIsBetter ${newTradeIsBetter}`.yellow)
+      potentialProfit !== 0 && log(`money ${money} -> ${money * (1 + potentialProfit)}`.yellow)
+
+      money = money * (1 + potentialProfit)
+
+      // buy in this symbol
+      if (newTradeIsBetter) {
+        lastPickedTrade = pickedTrade
+        log(`Buy in ${lastPickedTrade.symbol}`.blue)
+      } else {
+        lastPickedTrade = null
+      }
     }
 
     log(`shift ${shift}`)

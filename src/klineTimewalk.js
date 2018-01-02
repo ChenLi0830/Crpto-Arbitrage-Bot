@@ -26,7 +26,7 @@ function checkValueCriteria(klines, index) {
   let isFastKlineLarger = (klines[windows[0]][index] > klines[windows[1]][index]) && (klines[windows[0]][index] > klines[windows[2]][index])
   let isMiddleKlineLarger = klines[windows[1]][index] > klines[windows[2]][index]
 
-  return isFastKlineLarger
+  return isFastKlineLarger && isMiddleKlineLarger
 }
 
 function checkBuyingCriteria(klines, volumeLine) {
@@ -44,11 +44,14 @@ function checkBuyingCriteria(klines, volumeLine) {
   return nowValueMatchCriteria && !prevValueMatchCriteria && isVolumeIncrease
 }
 
-function rateCurrency(klines, volumeLine) {
+function rateCurrency(klines, volumeLine, priceLine) {
   let fastKline = klines[windows[0]]
   let deriveK = (fastKline[lineLength - 1] - fastKline[lineLength - 2]) / fastKline[lineLength - 2]
   let deriveVolume = (volumeLine[lineLength - 1] - volumeLine[lineLength - 2]) / volumeLine[lineLength - 2]
-  let rate = deriveK * deriveVolume * Math.sqrt(volumeLine[lineLength - 1])
+
+  let volInBTC = priceLine[lineLength - 1] * volumeLine[lineLength - 1]
+
+  let rate = Math.min(deriveK, 5) * Math.min(deriveVolume, 3) * volInBTC//* Math.sqrt(volInBTC)
 
 //  if (rate < 0 || rate > 100000) {
 //    console.log('fastKline[lineLength - 1]', fastKline[lineLength - 1], 'fastKline[lineLength - 2]', fastKline[lineLength - 2])
@@ -65,11 +68,11 @@ function rateAndSort(extractedInfoList) {
   let buyingPool = []
 
   for (let extractedInfo of extractedInfoList) {
-    const {klines, volumeLine} = extractedInfo
+    const {klines, volumeLine, priceLine} = extractedInfo
     let matchBuyingCriteria = checkBuyingCriteria(klines, volumeLine)
 
     if (matchBuyingCriteria) {
-      let rate = rateCurrency(klines, volumeLine)
+      let rate = rateCurrency(klines, volumeLine, priceLine)
 
       buyingPool.push({...extractedInfo, rate})
     }
@@ -88,8 +91,7 @@ function printLine(lineData){
 function pickTradeUpdateFile(newExtractedInfoList){
   let sortedPool = rateAndSort(newExtractedInfoList)
   if (sortedPool.length > 0) {
-    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
-
+//    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
     let pickedTrade = sortedPool[0]
     //      把pickedTrade写入文件，由购买currency线程读取
     fs.writeFileSync(PICKED_TRADE, 'module.exports = ' + JSON.stringify(pickedTrade), 'utf-8')
@@ -151,7 +153,11 @@ function timeWalk(extractedInfoList){
 
     let pickedTrade = pickTradeUpdateFile(newExtractedInfoList)
 
-    /** determine if sell */
+    if (pickedTrade) {
+      log('pickedTrade'.green, pickedTrade.symbol, pickedTrade.rate)
+      log(`${(500 - shift - lineLength) * 15} mins ago from 10:00am`)
+    }
+      /** determine if sell */
     let lastTradeCurrentState = lastPickedTrade
       ? _.find(newExtractedInfoList, {symbol: lastPickedTrade.symbol})
       : null
@@ -160,7 +166,7 @@ function timeWalk(extractedInfoList){
     let lostTooMuch = potentialProfit < -0.03
     let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.priceLine[lineLength-1] - lastTradeCurrentState.priceLine[lineLength-2])/lastTradeCurrentState.priceLine[lineLength-1] : 0
     let bigChangeInPrice = recentPriceDiff < -0.03
-    let earnedEnough = potentialProfit > 0.10
+    let earnedEnough = potentialProfit > 0.50
     let noLongerGoodTrade = lastPickedTrade
       ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1 )
       : false

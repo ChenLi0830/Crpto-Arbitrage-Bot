@@ -14,7 +14,8 @@ let intervalInMillesec = 15 * 60 * 1000
 let windows = [7, 25, 99] // 必须从小到大，maximum = 500 - lineLength
 let lineLength = 50
 const ohlcvIndex = 4 // [ timestamp, open, high, low, close, volume ]
-const KLINE_FILE = './savedData/klines.js'
+const volumeIndex = 5
+const KLINE_FILE = './savedData/klines/klines.js'
 
 //-----------------------------------------------------------------------------
 
@@ -92,27 +93,31 @@ function timeWalk(extractedInfoList){
   let shift = 0
   while (shift + lineLength < 500) {
     let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
+      /** newKlines - length==lineLength */
       let newKlines = {}
       Object.keys(extractedInfo.klines).forEach(key => {
-        log('extractedInfo.klines[key].length', extractedInfo.klines[key].length)
         newKlines[key] = extractedInfo.klines[key].slice(shift, shift + lineLength)
-//        log(`newKlines.length`, newKlines.length)
       })
+
+      /** newVolumes */
+      let newVolumes = extractedInfo.volumeLine.slice(shift, shift + lineLength)
+
       return {
         ...extractedInfo,
         klines: newKlines,
-        volumeLine: extractedInfo.volumeLine.slice(shift, shift + lineLength),
+        volumeLine: newVolumes,
       }
     })
 
 //    log('newExtractedInfoList', JSON.stringify(newExtractedInfoList))
-    fs.writeFileSync(`${KLINE_FILE}-${shift}`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
+    fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
 
     let sortedPool = rateAndSort(newExtractedInfoList)
     if (sortedPool.length > 0) {
-      console.log('sortedPool', sortedPool)
+      console.log('sortedPoolsymbol', sortedPool.map(currency => currency.symbol).join(' '))
+      console.log(`${(500-shift - lineLength) * 15} mins ago from 10:00am`)
     }
-    console.log(`${(500-shift - lineLength) * 15} mins ago from 11:00pm`)
+
     log(`shift ${shift}`)
     shift ++
   }
@@ -122,41 +127,46 @@ function timeWalk(extractedInfoList){
   while (true) { // keep fetching
 //    await api.sleep(intervalInMillesec * 0.6)
     try {
-      let exchange = new ccxt.binance()
-      await exchange.loadMarkets()
+//      let exchange = new ccxt.binance()
+//      await exchange.loadMarkets()
+//
+//      let extractedInfoList = []
+//      for (let symbol of exchange.symbols) {
+//        let klines = {}
+//        let volumeLine = []
+//
+//        if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
+//          log(`processing ${symbol}`.green)
+//          const ohlcv = await new ccxt.binance().fetchOHLCV(symbol, interval)
+//
+////          const lineData = ohlcv.slice(-lineLength).map(x => x[ohlcvIndex]) // closing price
+//////          console.log('lineData', lineData)
+//////          printLine(lineData)
+//
+//          /** get klines */
+//          for (let window of windows) {
+//            klines[window] = getAverage(ohlcv, window, ohlcvIndex)
+////            printLine(klines[window])
+//          }
+//
+//          /** get volumeLine */
+//          volumeLine = ohlcv.slice(-klines[windows[0]].length).map(x => x[volumeIndex])
+////          log('volumeLine', volumeLine.length)
+//
+//          extractedInfoList.push({
+//            symbol,
+//            klines,
+//            volumeLine
+//          })
+//        }
+//      }
 
-      let extractedInfoList = []
-      for (let symbol of exchange.symbols) {
-        let klines = {}
-        let volumeLine = []
+      const extractedInfoList = require('../savedData/klines/klines')
+//      let sortedPool = rateAndSort(extractedInfoList)
+//      log(`sortedPool`, sortedPool)
+      timeWalk(extractedInfoList)
 
-        if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
-          log(`processing ${symbol}`.green)
-          const ohlcv = await new ccxt.binance().fetchOHLCV(symbol, interval)
-
-          const lineData = ohlcv.slice(-lineLength).map(x => x[ohlcvIndex]) // closing price
-//          console.log('lineData', lineData)
-//          printLine(lineData)
-
-          for (let window of windows) {
-            klines[window] = getAverage(ohlcv, window, ohlcvIndex)
-//            printLine(klines[window])
-          }
-
-          extractedInfoList.push({
-            symbol,
-            klines,
-            volumeLine
-          })
-        }
-      }
-
-//      const extractedInfoList = require('../savedData/klines')
-////      let sortedPool = rateAndSort(extractedInfoList)
-////      log(`sortedPool`, sortedPool)
-//      timeWalk(extractedInfoList)
-
-      fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
+//      fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
 
     } catch (e) {
       console.error(e)

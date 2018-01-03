@@ -11,13 +11,13 @@ require('ansicolor').nice;
 
 const interval = '15m'
 const intervalInMillesec = 15 * 60 * 1000
+const numberOfFetch = 6 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
 const windows = [7, 25, 99] // 必须从小到大，maximum = 500 - lineLength
 const lineLength = 50
 const ohlcvIndex = 4 // [ timestamp, open, high, low, close, volume ]
 const volumeIndex = 5
 const KLINE_FILE = './savedData/klines/klines.js'
 const PICKED_TRADE = './savedData/pickedTrade.js'
-
 //-----------------------------------------------------------------------------
 
 function getAverage(ohlcv, window, ohlcvIndex){
@@ -55,10 +55,30 @@ function printLine(lineData){
         let klines = {}
         let volumeLine = []
         let priceLine = []
+        let symbolInvalid = false
 
         if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
           log(`processing ${symbol}`.green)
-          const ohlcv = await new ccxt.binance().fetchOHLCV(symbol, interval)
+
+          let ohlcv = await exchange.fetchOHLCV(symbol, interval)
+
+//         if numberOfFetch > 0 , 获取更多历史数据
+          for (let i=0; i<numberOfFetch - 1; i++){
+            let timeStamp = ohlcv[0][0]
+            let newSince = timeStamp - 500 * intervalInMillesec
+            let newOhlcv = await exchange.fetchOHLCV(symbol, interval, newSince)
+            if (newOhlcv[0][0] === ohlcv[0][0]) {
+              symbolInvalid = true
+              log(`symbol ${symbol} doesn't have that much history data, ignoring it`.yellow)
+              break
+            }
+            console.log('newOhlcv.slice(-1)[0][0]', newOhlcv.slice(-1)[0][0], 'ohlcv[0][0]', ohlcv[0][0])
+            ohlcv = [...newOhlcv, ...ohlcv]
+          }
+
+          if (symbolInvalid) { // do not save invalid symbol data
+            continue
+          }
 
 //          const lineData = ohlcv.slice(-lineLength).map(x => x[ohlcvIndex]) // closing price
 ////          console.log('lineData', lineData)

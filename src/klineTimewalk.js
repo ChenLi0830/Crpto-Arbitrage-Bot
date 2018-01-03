@@ -53,7 +53,7 @@ function rateCurrency(klines, volumeLine) {
 
   let volInBTC = klines[windows[0]][lineLength - 1] * volumeLine[lineLength - 1]
 
-  let rate = Math.min(deriveK * deriveK, 5) * Math.min(deriveVolume, 3) * volInBTC //* Math.sqrt(volInBTC)
+  let rate = Math.min(deriveK * deriveK * deriveK, 20) * Math.min(deriveVolume, 3) * volInBTC //* Math.sqrt(volInBTC)
 
 //  if (rate < 0 || rate > 100000) {
 //    console.log('fastKline[lineLength - 1]', fastKline[lineLength - 1], 'fastKline[lineLength - 2]', fastKline[lineLength - 2])
@@ -94,10 +94,12 @@ function pickTradeUpdateFile(newExtractedInfoList){
   let sortedPool = rateAndSort(newExtractedInfoList)
   if (sortedPool.length > 0) {
 //    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
-    let pickedTrade = sortedPool[0]
-    //      把pickedTrade写入文件，由购买currency线程读取
-    fs.writeFileSync(PICKED_TRADE, 'module.exports = ' + JSON.stringify(pickedTrade), 'utf-8')
-
+    let pickedTrade
+//    if (sortedPool[0].rate > 20){
+      pickedTrade  = sortedPool[0]
+      //      把pickedTrade写入文件，由购买currency线程读取
+      fs.writeFileSync(PICKED_TRADE, 'module.exports = ' + JSON.stringify(pickedTrade), 'utf-8')
+//    }
     return pickedTrade
   }
 }
@@ -170,7 +172,7 @@ function timeWalk(extractedInfoList){
     let lostTooMuch = potentialProfit < -0.03
     let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.priceLine[lineLength-1] - lastTradeCurrentState.priceLine[lineLength-2])/lastTradeCurrentState.priceLine[lineLength-1] : 0
     let bigChangeInPrice = recentPriceDiff < -0.03
-    let earnedEnough = potentialProfit > 0.10
+    let earnedEnough = potentialProfit > 0.20
     let noLongerGoodTrade = lastPickedTrade
       ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1 )
       : false

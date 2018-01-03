@@ -16,6 +16,7 @@ const windows = [8, 32, 128] // 必须从小到大，maximum = 500 - lineLength
 const lineLength = 50
 const ohlcvIndex = 4 // [ timestamp, open, high, low, close, volume ]
 const volumeIndex = 5
+const timeIndex = 0
 const KLINE_FILE = './savedData/klines/klines.js'
 const PICKED_TRADE = './savedData/pickedTrade.js'
 //-----------------------------------------------------------------------------
@@ -55,6 +56,7 @@ function printLine(lineData){
         let klines = {}
         let volumeLine = []
         let priceLine = []
+        let timeLine = []
         let symbolInvalid = false
 
         if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
@@ -87,25 +89,27 @@ function printLine(lineData){
           /** get klines */
           for (let window of windows) {
             klines[window] = getAverage(ohlcv, window, ohlcvIndex)
-//            printLine(klines[window])
           }
 
+          let totalKlinelength = klines[windows[0]].length
           /** get volumeLine */
-          volumeLine = ohlcv.slice(-klines[windows[0]].length).map(x => x[volumeIndex])
-//          log('volumeLine', volumeLine.length)
-
+          volumeLine = ohlcv.slice(-totalKlinelength).map(x => x[volumeIndex])
           /** get priceLine */
-          priceLine = ohlcv.slice(-klines[windows[0]].length).map(x => x[ohlcvIndex])
+          priceLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
+          /** get timeLine */
+          timeLine = ohlcv.slice(-totalKlinelength).map(x => x[timeIndex])
 
           extractedInfoList.push({
             symbol,
             klines,
             volumeLine,
             priceLine,
+            timeLine,
           })
         }
       }
 
+      log(`klineDataLength ${extractedInfoList[0].klines[windows[0]].length}`)
       fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
 
     } catch (e) {

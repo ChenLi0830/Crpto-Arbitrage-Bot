@@ -9,11 +9,20 @@ const fs = require('fs')
 const _ = require('lodash')
 require('ansicolor').nice;
 
+//const interval = '1d'
+//const intervalInMillesec = 24 * 60 * 60 * 1000
+//const recordNb = 30 // default = 500, use less for large intervals
+//const numberOfFetch = 1 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
+//const windows = [2] // 必须从小到大，maximum = 500 - lineLength
+//const lineLength = 2
+
 const interval = '15m'
 const intervalInMillesec = 15 * 60 * 1000
+const recordNb = 500 // default = 500, use less for large intervals
 const numberOfFetch = 1 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
 const windows = [8, 32, 128] // 必须从小到大，maximum = 500 - lineLength
 const lineLength = 50
+
 const ohlcvIndex = 4 // [ timestamp, open, high, low, close, volume ]
 const volumeIndex = 5
 const timeIndex = 0
@@ -53,6 +62,7 @@ function printLine(lineData){
 
       let extractedInfoList = []
       for (let symbol of exchange.symbols) {
+//        await api.sleep (exchange.rateLimit)
         let klines = {}
         let volumeLine = []
         let priceLine = []
@@ -62,13 +72,18 @@ function printLine(lineData){
         if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
           log(`processing ${symbol}`.green)
 
-          let ohlcv = await exchange.fetchOHLCV(symbol, interval)
+          let ohlcv = await exchange.fetchOHLCV(symbol, interval, undefined, recordNb)
+
+          if (ohlcv.length < recordNb){
+            log(`symbol ${symbol} doesn't have that much history data, ignoring it`.yellow)
+            symbolInvalid = true
+          }
 
 //         if numberOfFetch > 0 , 获取更多历史数据
           for (let i=0; i<numberOfFetch - 1; i++){
             let timeStamp = ohlcv[0][0]
             let newSince = timeStamp - 500 * intervalInMillesec
-            let newOhlcv = await exchange.fetchOHLCV(symbol, interval, newSince)
+            let newOhlcv = await exchange.fetchOHLCV(symbol, interval, newSince, recordNb)
             if (newOhlcv[0][0] === ohlcv[0][0]) {
               symbolInvalid = true
               log(`symbol ${symbol} doesn't have that much history data, ignoring it`.yellow)

@@ -192,6 +192,37 @@ function useKlineStrategy(params){
   return {lastPickedTrade, money, newPlotDot}
 }
 
+function useVolumeStrategy(params) {
+  let {newExtractedInfoList, totalDataLength, lastPickedTradeList, money, currentTime} = params
+  let sortedByVol = _.sortBy(newExtractedInfoList, o => - (o.volumeLine[lineLength-1] * o.priceLine[lineLength-1]))
+//  console.log('sortedByVol', sortedByVol.map(info => info.volumeLine[lineLength-1] * info.priceLine[lineLength-1]).join(' '))
+
+  let firstFive = sortedByVol.slice(0, 5)
+  log('firstFive.length', firstFive.length, firstFive.map(info => info.symbol).join(' '))
+
+  let overallProfit = 0
+  if (lastPickedTradeList.length === 5) {
+    for (let lastPickedTrade of lastPickedTradeList) {
+      let lastTradeCurrentState = _.find(newExtractedInfoList, {symbol: lastPickedTrade.symbol})
+      let profit = calcProfitPercent(lastPickedTrade, lastTradeCurrentState)
+      overallProfit += ( profit/5 )
+    }
+  }
+
+  lastPickedTradeList = firstFive
+  money = money * ( 1 + overallProfit )
+  log(`overallProfit ${overallProfit}, money ${money}`.green)
+  log(currentTime)
+
+  let newPlotDot = {
+    time: currentTime,
+    profit: overallProfit,
+    value: money,
+  }
+
+  return {lastPickedTradeList, money, newPlotDot}
+}
+
 function timeWalk(extractedInfoList){
   let shift = 0
   let money = 100
@@ -227,24 +258,23 @@ function timeWalk(extractedInfoList){
     let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
 
-    /** useKlineStrategy */
-    let klineResult = useKlineStrategy({newExtractedInfoList, totalDataLength, lastPickedTrade, money, currentTime})
-    lastPickedTrade = klineResult.lastPickedTrade
-    money = klineResult.money
-    let newPlotDot = klineResult.newPlotDot
-
-//    /** volumeStrategy */
-//    let volumeResult = useVolumeStrategy({newExtractedInfoList, totalDataLength, lastPickedTradeList, shift, money})
-//    lastPickedTradeList = klineResult.lastPickedTradeList
-//
-////    money = klineResult.money
+//    /** useKlineStrategy */
+//    let klineResult = useKlineStrategy({newExtractedInfoList, totalDataLength, lastPickedTrade, money, currentTime})
+//    lastPickedTrade = klineResult.lastPickedTrade
+//    money = klineResult.money
 //    let newPlotDot = klineResult.newPlotDot
+
+    /** volumeStrategy */
+    let volumeResult = useVolumeStrategy({newExtractedInfoList, totalDataLength, lastPickedTradeList, money, currentTime})
+    lastPickedTradeList = volumeResult.lastPickedTradeList
+    money = volumeResult.money
+    let newPlotDot = volumeResult.newPlotDot
 
     if (!!newPlotDot) {
       plot.push(newPlotDot)
     }
 
-    log(`shift ${shift}`)
+//    log(`shift ${shift}`)
     shift++
   }
 //  profit, rate

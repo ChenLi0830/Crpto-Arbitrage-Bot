@@ -26,6 +26,14 @@ let {
 
 //-----------------------------------------------------------------------------
 
+console.reset = function () {
+  const readline = require('readline')
+  const blank = '\n'.repeat(process.stdout.rows)
+  console.log(blank)
+  readline.cursorTo(process.stdout, 0, 0)
+  readline.clearScreenDown(process.stdout)
+}
+
 function getAverage(ohlcv, window, ohlcvIndex){
   let endIdx = ohlcv.length - 1
   let startIdx = ohlcv.length - window
@@ -160,6 +168,8 @@ function printLine(lineData){
 
     if (!process.env.PRODUCTION) {
       break
+    } else {
+      console.reset()
     }
   }
   process.exit()

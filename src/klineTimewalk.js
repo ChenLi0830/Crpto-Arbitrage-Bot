@@ -28,7 +28,18 @@ function checkValueCriteria(klines, index, closeLine) {
   let isMiddleKlineLarger = klines[windows[1]][index] > klines[windows[2]][index]
   let priceGreaterThanFastKline = closeLine[index] > klines[windows[0]][index]
 
-  return isFastKlineLarger && isMiddleKlineLarger && priceGreaterThanFastKline
+//  let accumatedIncrease = 0
+//  let accumulatedInterval = 0
+//  for (let i=index-1; i>0; i--) {
+//    if (klines[windows[0]][i-1] > klines[windows[0]][i]) {
+//      accumatedIncrease = (klines[windows[0]][index] - klines[windows[0]][i-1]) / klines[windows[0]][i-1]
+//      accumulatedInterval = index - i
+//      break
+//    }
+//  }
+//  let previousIncreaseNotTooBig = accumatedIncrease < 0.2 || accumulatedInterval < 5
+
+  return isFastKlineLarger && isMiddleKlineLarger && priceGreaterThanFastKline /*&& previousIncreaseNotTooBig*/
 }
 
 function checkVolCriteria(volumeLine){
@@ -109,7 +120,7 @@ function pickTradeUpdateFile(newExtractedInfoList){
   }
 }
 
-function isNewTradeBetter(pickedTrade, lastPickedTrade){
+function noCurrentTradeOrNewTradeBetter(pickedTrade, lastPickedTrade){
   return !lastPickedTrade || (pickedTrade.rate > lastPickedTrade.rate)
 }
 
@@ -154,9 +165,9 @@ async function useKlineStrategy(params){
 //    ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1, lastTradeCurrentState.closeLine )
 //    : false
 
-//  /** determine if change */
+////  /** determine if change */
 //  let newTradeIsBetter = pickedTrade
-//    ? isNewTradeBetter(pickedTrade, lastPickedTrade)
+//    ? noCurrentTradeOrNewTradeBetter(pickedTrade, lastPickedTrade)
 //    : false
 
   let newPlotDot = null
@@ -261,7 +272,10 @@ async function useKlineStrategy(params){
         newPlotDot.value = BTCAmount
       }
 
-    } else { // Time Walk Simulation
+    } else {
+      /*
+      * Time Walk Simulation
+      * */
       newPlotDot = {
         time: currentTime,
         profit: lastPickedTrade ? potentialProfit : 'n/a',
@@ -393,16 +407,29 @@ async function timeWalk(extractedInfoList){
 //    lastPickedTradeList = volumeResult.lastPickedTradeList
 //    money = volumeResult.money
 //    let newPlotDot = volumeResult.newPlotDot
-
     if (!!newPlotDot) {
       plot.push(newPlotDot)
     }
-
 //    log(`shift ${shift}`)
     shift++
   }
 //  profit, rate
   saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
+}
+
+function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
+  if (!prevExtractedInfoList) {
+    return false
+  }
+
+  for (let info of prevExtractedInfoList){
+    let newInfo = _.find(extractedInfoList, {symbol: info.symbol})
+    if (info.timeLine.slice(-1)[0] !== newInfo.timeLine.slice(-1)[0]) {
+      return false
+    }
+  }
+
+  return true
 }
 
 (async function main () {
@@ -420,10 +447,16 @@ async function timeWalk(extractedInfoList){
     let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials[exchangeId]))
 
     log(`---------- Running in Production ----------`.blue)
-    await api.sleep(1000)
+    await api.sleep(3000)
+
+    log(`---------- Fetching Balance ----------`.green)
+    let money = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+    log(`---        BTC Balance - ${money}`.green)
+    log(`---------- Fetching Balance ---------- \n`.green)
+
     while (true) {
       try {
-        await api.sleep(1000)
+        await api.sleep(5000)
         /**
          * Read data and get currentTime
          * */
@@ -434,7 +467,7 @@ async function timeWalk(extractedInfoList){
         /**
          * Skip if extractedInfoList hasn't changed
          * */
-        if (_.eq(prevExtractedInfoList, extractedInfoList)) {
+        if (checkInfoChanged(prevExtractedInfoList, extractedInfoList)) {
           log('No new data, Skip'.green)
           continue
         }
@@ -443,27 +476,22 @@ async function timeWalk(extractedInfoList){
         }
 
         let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
-        console.log('timeEpoch', timeEpoch)
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
         log(`${currentTime}: ->`.green)
-
-        log(`---------- Fetching Balance ----------`.green)
-        let money = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
-        log(`---        BTC Balance - ${money}`.green)
-        log(`---------- Fetching Balance ---------- \n`.green)
 
         log(`---------- Using Kline Strategy ---------- `.green)
         let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange})
 
         lastPickedTrade = klineResult.lastPickedTrade
         let newPlotDot = klineResult.newPlotDot
+        console.log('newPlotDot', newPlotDot)
         if (!!newPlotDot) {
           plot.push(newPlotDot)
           if (newPlotDot.value !== money) {
             log(`BTC balance: ${money} -> ${newPlotDot.value}`)
           }
         }
-
+        console.log('plot', plot)
         money = klineResult.money
         log(`---------- Using Kline Strategy ---------- \n`.green)
 

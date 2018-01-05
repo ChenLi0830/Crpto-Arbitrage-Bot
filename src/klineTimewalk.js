@@ -132,7 +132,6 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
 
 async function useKlineStrategy(params){
   let {newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange} = params
-  log(`useKlinePRODUCTION ${PRODUCTION}`)
   let pickedTrade = pickTradeUpdateFile(newExtractedInfoList)
 
   if (pickedTrade) {
@@ -164,6 +163,14 @@ async function useKlineStrategy(params){
 
   /** make changes */
   if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline /*lostTooMuch || bigChangeInPrice || noLongerGoodTrade*/ ) {
+    newPlotDot = {
+      time: currentTime,
+      rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
+      BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
+      volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
+      volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
+      klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
+    }
     if (PRODUCTION) {
       log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline}`.yellow)
       if (earnedEnough || dropThroughKline) {
@@ -178,7 +185,7 @@ async function useKlineStrategy(params){
       } else {
         // buy in this symbol
         lastPickedTrade = pickedTrade
-        log(`--- Buy in ${lastPickedTrade.symbol}}`.blue)
+        log(`--- Buy in ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
       }
 
@@ -269,6 +276,37 @@ function useVolumeStrategy(params) {
   return {lastPickedTradeList, money, newPlotDot}
 }
 
+function cutExtractedInfoList (extractedInfoList, shift, lineLength) {
+  let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
+    /** newKlines - length==lineLength */
+    let newKlines = {}
+    Object.keys(extractedInfo.klines).forEach(key => {
+      newKlines[key] = extractedInfo.klines[key].slice(shift, shift + lineLength)
+    })
+    /** newVolumes */
+    let newVolumes = extractedInfo.volumeLine.slice(shift, shift + lineLength)
+    /** newPrices */
+    let newCloseLine = extractedInfo.closeLine.slice(shift, shift + lineLength)
+    let newOpenLine = extractedInfo.openLine.slice(shift, shift + lineLength)
+    let newHighLine = extractedInfo.highLine.slice(shift, shift + lineLength)
+    let newLowLine = extractedInfo.lowLine.slice(shift, shift + lineLength)
+    /** newTimes */
+    let newTimes = extractedInfo.timeLine.slice(shift, shift + lineLength)
+
+    return {
+      ...extractedInfo,
+      klines: newKlines,
+      volumeLine: newVolumes,
+      closeLine: newCloseLine,
+      openLine: newOpenLine,
+      highLine: newHighLine,
+      lowLine: newLowLine,
+      timeLine: newTimes,
+    }
+  })
+  return newExtractedInfoList
+}
+
 async function timeWalk(extractedInfoList){
   let shift = 0
   let money = 100
@@ -277,34 +315,7 @@ async function timeWalk(extractedInfoList){
   let plot = []//{time, value, event, profit, rate, BTCvolume}
 
   while (shift + lineLength < extractedInfoList[0].volumeLine.length) {
-    let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
-      /** newKlines - length==lineLength */
-      let newKlines = {}
-      Object.keys(extractedInfo.klines).forEach(key => {
-        newKlines[key] = extractedInfo.klines[key].slice(shift, shift + lineLength)
-      })
-      /** newVolumes */
-      let newVolumes = extractedInfo.volumeLine.slice(shift, shift + lineLength)
-      /** newPrices */
-      let newCloseLine = extractedInfo.closeLine.slice(shift, shift + lineLength)
-      let newOpenLine = extractedInfo.openLine.slice(shift, shift + lineLength)
-      let newHighLine = extractedInfo.highLine.slice(shift, shift + lineLength)
-      let newLowLine = extractedInfo.lowLine.slice(shift, shift + lineLength)
-      /** newTimes */
-      let newTimes = extractedInfo.timeLine.slice(shift, shift + lineLength)
-
-      return {
-        ...extractedInfo,
-        klines: newKlines,
-        volumeLine: newVolumes,
-        closeLine: newCloseLine,
-        openLine: newOpenLine,
-        highLine: newHighLine,
-        lowLine: newLowLine,
-        timeLine: newTimes,
-      }
-    })
-
+    let newExtractedInfoList = cutExtractedInfoList (extractedInfoList, shift, lineLength)
     fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
     let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
@@ -358,8 +369,10 @@ async function timeWalk(extractedInfoList){
        * */
       delete require.cache[require.resolve('../savedData/klines/klines')]//Clear require cache
       const extractedInfoList = require('../savedData/klines/klines')
+      const newExtractedInfoList = cutExtractedInfoList(extractedInfoList, 0, lineLength)
 
-      let timeEpoch = extractedInfoList[0].timeLine[lineLength-1]
+      let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
+      console.log('timeEpoch', timeEpoch)
       let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
       log(`${currentTime}: ->`.green)
 
@@ -378,7 +391,8 @@ async function timeWalk(extractedInfoList){
         log(`---------- Fetching Balance ---------- \n`.green)
 
         log(`---------- Using Kline Strategy ---------- `.green)
-        let klineResult = await useKlineStrategy({extractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange})
+        let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange})
+
         lastPickedTrade = klineResult.lastPickedTrade
         money = klineResult.money
         let newPlotDot = klineResult.newPlotDot
@@ -403,7 +417,11 @@ async function timeWalk(extractedInfoList){
      * TimeWalk simulation
      * */
     const extractedInfoList = require('../savedData/klines/klines')
-    await timeWalk(extractedInfoList)
+    try {
+      await timeWalk(extractedInfoList)
+    } catch (error) {
+      log(error.message.red)
+    }
   }
   process.exit()
 })()

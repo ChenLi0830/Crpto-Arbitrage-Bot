@@ -16,11 +16,11 @@ require('ansicolor').nice;
 //const windows = [2] // 必须从小到大，maximum = 500 - lineLength
 //const lineLength = 2
 
-const interval = '15m'
-const intervalInMillesec = 15 * 60 * 1000
+const interval = '5m'
+const intervalInMillesec = 5 * 60 * 1000
 const recordNb = 500 // default = 500, use less for large intervals
-const numberOfFetch = 1 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
-const windows = [8, 32, 128] // 必须从小到大，maximum = 500 - lineLength
+const numberOfFetch = 5 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
+const windows = [4, 16, 99] // 必须从小到大，maximum = 500 - lineLength
 const lineLength = 50
 
 const ohlcvIndex = 4 // [ timestamp, open, high, low, close, volume ]

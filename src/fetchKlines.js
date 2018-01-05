@@ -9,26 +9,21 @@ const fs = require('fs')
 const _ = require('lodash')
 require('ansicolor').nice;
 
-//const interval = '1d'
-//const intervalInMillesec = 24 * 60 * 60 * 1000
-//const recordNb = 30 // default = 500, use less for large intervals
-//const numberOfFetch = 1 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
-//const windows = [2] // 必须从小到大，maximum = 500 - lineLength
-//const lineLength = 2
+let {
+  interval,
+  intervalInMillesec,
+  recordNb,
+  numberOfFetch,
+  windows,
+  lineLength,
+  ohlcvIndex,
+  volumeIndex,
+  timeIndex,
+  KLINE_FILE,
+  PICKED_TRADE,
+  blackList,
+} = require('./config')
 
-const interval = '5m'
-const intervalInMillesec = 5 * 60 * 1000
-const recordNb = 500 // default = 500, use less for large intervals
-const numberOfFetch = 2 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
-const windows = [4, 16, 99] // 必须从小到大，maximum = 500 - lineLength
-const lineLength = 50
-
-const ohlcvIndex = 4 // [ timestamp, open, high, low, close, volume ]
-const volumeIndex = 5
-const timeIndex = 0
-const KLINE_FILE = './savedData/klines/klines.js'
-const PICKED_TRADE = './savedData/pickedTrade.js'
-let blackList = ['TRX/BTC', 'XRP/BTC', 'BCC/BTC', 'AION/BTC']
 //-----------------------------------------------------------------------------
 
 function getAverage(ohlcv, window, ohlcvIndex){
@@ -55,6 +50,22 @@ function printLine(lineData){
 }
 
 (async function main () {
+  if (process.env.PRODUCTION) {
+    log('--------- Fetching Data For Production -------'.blue)
+
+    log(`---       interval ${interval}`)
+    log(`---       intervalInMillesec ${intervalInMillesec}`)
+    log(`---       recordNb ${recordNb}`)
+    log(`---       numberOfFetch ${numberOfFetch}`)
+
+    if (numberOfFetch > 1){
+      log('---       numberOfFetch should usually be 1 in production'.red)
+    }
+
+    log(`---       windows ${windows}`)
+    log(`---       lineLength ${lineLength}`)
+  }
+
   while (true) { // keep fetching
 //    await api.sleep(intervalInMillesec * 0.6)
     try {
@@ -147,16 +158,9 @@ function printLine(lineData){
       console.error(e)
     }
 
-    break // Todo remove in production
+    if (!process.env.PRODUCTION) {
+      break
+    }
   }
   process.exit()
 })()
-
-module.exports = {
-  interval,
-  intervalInMillesec,
-  windows,
-  lineLength,
-  ohlcvIndex,
-  volumeIndex,
-}

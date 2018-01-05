@@ -7,17 +7,13 @@ const fs = require('fs')
 const util = require('util')
 const api = require('./api')
 const _ = require('lodash')
-const credentials = require ('../credentials.js')
+const credentials = require ('../credentials1_2.js')
 
 require('ansicolor').nice
 
 let tickersBySymbol = []
-let potentialTrades = []
 
-const exchangeBlacklist = ['lakebtc', 'qryptos']
-const POTENTIAL_TRADE_FILE = './savedData/temp_tasksSortByProfit.js'
-const PRICE_DIFF = 0.01;
-const BTC_VOLUME = 0.5
+const PRICE_DIFF = 0.001;
 //-----------------------------------------------------------------------------
 
 process.on('uncaughtException', e => {
@@ -30,6 +26,10 @@ process.on('unhandledRejection', e => {
 })
 
 //-----------------------------------------------------------------------------
+
+let human_value = function (price) {
+  return typeof price == 'undefined' ? 'N/A' : price
+}
 
 let updateTickersBySymbol = (ticker, exchange) => {
   let exchangeTicker = getExchangeTicker(ticker, exchange)
@@ -64,38 +64,24 @@ async function fetchTickers (exchange) {
 
     await exchange.loadMarkets()
 
-    /** fetch all tickers together */
-    console.log(exchange.id, 'exchange.hasFetchTickers', exchange.hasFetchTickers)
-    if (exchange.hasFetchTickers) {
-      let tickers = await exchange.fetchTickers()
-      Object.keys(tickers).forEach(key => {
-        let ticker = tickers[key]
-        updateTickersBySymbol(ticker, exchange)
-      })
-    }
-    /** fetch ticker one by one if exchange doesn't have fetchTickers method */
-    else {
-      for (let symbol of exchange.symbols) {
-        if ((symbol.indexOf('.d') < 0) && (symbol.endsWith('/BTC') && symbol.startsWith('TRX'))) { // skip darkpool symbols
-          await api.sleep(exchange.rateLimit)
-          let ticker = await exchange.fetchTicker(symbol)
-          console.log('ticker', ticker)
-          console.log(`Fetched ${symbol} from ${exchange.id} with rateLimit: ${exchange.rateLimit}`)
+    for (let symbol of exchange.symbols) {
+//      if (symbol.endsWith('/BTC') && symbol.indexOf('ETH')>-1) { // skip darkpool symbols
+      if (symbol==='ETH/BTC' || symbol==='LTC/BTC') { // skip darkpool symbols
+        await api.sleep(exchange.rateLimit)
+        let ticker = await exchange.fetchTicker(symbol)
+        console.log('ticker', ticker)
+        console.log(`Fetched ${symbol} from ${exchange.id} with rateLimit: ${exchange.rateLimit}`)
 
-          updateTickersBySymbol(ticker, exchange)
-        }
-        //      break; // used for dev to avoid being throttled
+        updateTickersBySymbol(ticker, exchange)
       }
+      //      break; // used for dev to avoid being throttled
     }
 
     // 每完成一个交易所，就update tickersSortedByPrice
     let tickersSortedByPrice = api.sortByPrice(tickersBySymbol)
-//    fs.writeFileSync('./savedData/temp_tickersBySymbol.js', 'module.exports = ' + util.inspect(tickersBySymbol) , 'utf-8')
-//    fs.writeFileSync('./savedData/temp_tickersSortedByPrice.js', 'module.exports = ' + util.inspect(tickersSortedByPrice) , 'utf-8')
-    potentialTrades = await api.getPotentialTrades(tickersSortedByPrice, PRICE_DIFF, BTC_VOLUME)
-    if (potentialTrades.length > 0){
-      fs.writeFileSync(POTENTIAL_TRADE_FILE, 'module.exports = ' + util.inspect(potentialTrades), 'utf-8')
-    }
+    fs.writeFileSync('./savedData/temp_tickersBySymbol.js', 'module.exports = ' + util.inspect(tickersBySymbol) , 'utf-8')
+    fs.writeFileSync('./savedData/temp_tickersSortedByPrice.js', 'module.exports = ' + util.inspect(tickersSortedByPrice) , 'utf-8')
+    let potentialTrades = await api.getPotentialTrades(tickersSortedByPrice, PRICE_DIFF)
   }
 
   catch (e) {
@@ -103,10 +89,43 @@ async function fetchTickers (exchange) {
   }
 }
 
-async function fetchTrades() {
+//async function getPotentialTrades(tickersSortedByPrice) {
+//  let worthTasks = []
+//  for (let tickerKey of Object.keys(tickersSortedByPrice)) {
+//    let exchangePrices = tickersSortedByPrice[tickerKey]
+//    let lowIndex = 0
+//    let highIndex = exchangePrices.length - 1
+//
+//    while (highIndex > lowIndex && api.largePriceDiff(exchangePrices[highIndex], exchangePrices[lowIndex], PRICE_DIFF)) {
+//      if (exchangePrices[highIndex] > exchangePrices[lowIndex] * 2) {
+//        lowIndex++
+//        highIndex--
+//        continue
+//      } else {
+//        worthTasks.push({
+//          symbol: tickerKey,
+//          buyFrom: exchangePrices[lowIndex].exchangeId,
+//          purchasePrice: exchangePrices[lowIndex].price,
+//          sellTo: exchangePrices[highIndex].exchangeId,
+//          sellPrice: exchangePrices[highIndex].price,
+//          profitePercent: (exchangePrices[highIndex].price - exchangePrices[lowIndex].price) / exchangePrices[lowIndex].price
+//        })
+//        break
+//      }
+//    }
+//
+//  }
+//  let tasksSortByProfit = _.sortBy(worthTasks, task => -task.profitePercent)
+//  fs.writeFileSync('./savedData/temp_worthTasks.js', 'module.exports = ' + util.inspect(worthTasks) , 'utf-8')
+//  console.log('worthTasks', worthTasks)
+//}
+
+
+async function main () {
 
   let exchanges = []
   const enableRateLimit = true
+
   const ids = ccxt.exchanges.filter (id => id in credentials)
 
   /** instantiate all exchanges */
@@ -115,28 +134,17 @@ async function fetchTrades() {
 //    let exchange = new (ccxt)[id]()
     let exchange = new ccxt[id] (ccxt.extend ({ enableRateLimit }, credentials[id]))
 
-    if (_.includes(exchangeBlacklist, id)) {
-      return
-    }
-
     exchanges.push(exchange)
     await fetchTickers(exchange)
   }))
 
-  //  await api.makeTrade(trade)
+
+
+//  await api.makeTrade(trade)
   //  let succeeded = exchanges.filter (exchange => exchange.markets ? true : false).length.toString ().bright.green
   //  let failed = exchanges.filter (exchange => exchange.markets ? false : true).length
   //  let total = ccxt.exchanges.length.toString ().bright.white
   //  console.log (succeeded, 'of', total, 'exchanges loaded', ('(' + failed + ' errors)').red)
 }
 
-(async () => {
-  while (true) {
-    try{
-      await fetchTrades()
-    }
-    catch (e){
-      api.handleError(e)
-    }
-  }
-})()
+main()

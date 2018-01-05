@@ -16,6 +16,7 @@
     "json2csv": "^3.11.5",
     "lodash": "^4.17.4",
     "moment": "^2.20.1",
+    "moment-timezone": "^0.5.14",
     "ololog": "^1.1.78"
   }
 }

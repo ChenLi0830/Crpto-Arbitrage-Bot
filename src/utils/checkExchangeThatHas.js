@@ -12,9 +12,9 @@ async function checkExchangeThatHas(methodName){
     if (exchange[methodName]) {
       log(`${exchangeId} has ${methodName}`.green)
       /** update credential file */
-      if (credentials[exchangeId]) credentials[exchangeId][`_${methodName}`] = true
+//      if (credentials[exchangeId]) credentials[exchangeId][`_${methodName}`] = true
 //      log(credentials)
-      fs.writeFileSync('credentials.js', 'module.exports = ' + util.inspect(credentials), 'utf-8')
+//      fs.writeFileSync('credentials.js', 'module.exports = ' + util.inspect(credentials), 'utf-8')
     }
   })
 
@@ -22,3 +22,4 @@ async function checkExchangeThatHas(methodName){
 }
 
 checkExchangeThatHas('fetchDepositAddress')
+//checkExchangeThatHas('withdraw')

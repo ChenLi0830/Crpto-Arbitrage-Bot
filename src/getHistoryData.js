@@ -32,24 +32,31 @@ async function fetchData (exchangeId, symbol, interval = '1m', since = undefined
 
 (async function main () {
   /** params */
-  let exchangeId = 'huobipro'
+//  let exchangeId = 'huobipro'
+//  let fetchingGoal = 30 * 24
+//  let symbol = 'LTC/USDT'
+//  let interval = '1h' // 1m,1h,1d,1M,1y
+  let exchangeId = 'binance'
   let fetchingGoal = 30 * 24
-  let symbol = 'LTC/USDT'
+  let symbol = 'ETH/BTH'
   let interval = '1h' // 1m,1h,1d,1M,1y
   let fileName = `${exchangeId}-${symbol.replace('/', '-')}`
 
   /** calc other params based on given ones */
-  let fetchRecordNb // max=500
-  let fetchSince = new Date()
+  let fetchRecordNb // 获取多少个数据点 max=500
+  let fetchSince = new Date() // 时间
   let data = []
+  let milsecPerRecord
   if (interval === '1m') {
     fetchRecordNb = 8 * 60
+    milsecPerRecord = 60 * 60 * 1000
   } else if (interval === '1h') {
     fetchRecordNb = 30*24
+    milsecPerRecord = 60 * 60 * 1000
   }
 
   while (data.length < fetchingGoal) {
-    fetchSince -= fetchRecordNb * 60 * 60 * 1000
+    fetchSince -= fetchRecordNb * milsecPerRecord
     let fetchedData = await fetchData(exchangeId, symbol, interval, fetchSince,
       fetchRecordNb)
     data.push(...fetchedData)

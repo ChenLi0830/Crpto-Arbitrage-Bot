@@ -45,45 +45,81 @@
 //console.log('sorted', sorted)
 //
 
-const tickersSortedByPrice = require('../temp_tickersSortedByPrice')
+const tickersSortedByPrice = require('../savedData/temp_tickersSortedByPrice')
 const api = require('./api')
 const fs = require('fs')
 const util = require('util')
 const PRICE_DIFF = 0.01
+const credentials = require('../credentials.js')
+const ccxt = require('ccxt')
 
-async function main(){
-//  let trade = {
-//    symbol: 'AST/BTC',
-//    buyFrom: 'huobipro',
-//    purchasePrice: 0.000030435000000000003,
-//    sellTo: 'binance',
-//    sellPrice: 0.000030935,
-//    profitePercent: 0.016428454082470793
+//async function main(){
+//  let exchangeId = 'hitbtc2'
+//  let exchange = new ccxt[exchangeId](ccxt.extend(credentials[exchangeId]))
+//  let sellToId = 'binance'
+//  let sellExchange = new ccxt[sellToId](ccxt.extend(credentials[sellToId]))
+//    //
+////  let result = await exchange.privatePostNewAddress('BTC')
+////
+//////  let result = await huobipro.fetchBalance()
+////  console.log(result)
+//
+//  /** trading account to account */
+////  let amount = 0.01008149
+////  let transferResult = await exchange.private_post_account_transfer({'currency': 'BTC', 'amount': amount, 'type': 'exchangeToBank'})
+////  console.log(`transferResult`, transferResult)
+//
+////  /** wait for withdraw*/
+////  let srcBtcAmount = 0.00858149
+////  let currencySymbol = 'BTC'
+////  let BTCAmount = await api.waitForWithdrawComplete(exchange, srcBtcAmount, currencySymbol)
+////  console.log(`hitbtc2 transfer finished! BTCAmount ${BTCAmount}`)
+////
+////  /** buy coin */
+////  let transferResult = await exchange.private_post_account_transfer({'currency': 'BTC', 'amount': BTCAmount, 'type': 'bankToExchange'})
+////  console.log(`transferResult`, transferResult)
+//
+//  /** buy target */
+////  let symbol = 'BTG/BTC'
+////  let maxAmount = 0.4
+////  let result = await exchange.createMarketBuyOrder(symbol, maxAmount)
+////  console.log('result', result)
+//
+////  /** transfer target currency from main account to trading account */
+//  let targetSymbol = 'BTG'
+//  let boughtAmount = (await exchange.fetchBalance())['free'][targetSymbol]
+//  console.log('boughtAmount', boughtAmount)
+//
+//  let sellToAddress = await api.getAddress(sellExchange, targetSymbol)
+//  console.log(`sellToAddress`, sellToAddress)
+//
+//  let transferResult = await exchange.private_post_account_transfer({'currency': targetSymbol, 'amount': boughtAmount, 'type': 'exchangeToBank'})
+//  console.log(`---    transferResult${JSON.stringify(transferResult)}`)
+//
+//  let fee = 0
+//  if (exchange.fees && exchange.fees.funding && exchange.fees.funding.withdraw) {
+//    fee = exchange.fees.funding.withdraw[targetSymbol] || 0
 //  }
-  let trade = {
-    symbol: 'ETH/BTC',
-    buyFrom: 'quadrigacx',
-    purchasePrice: 0.048658325,
-    sellTo: 'binance',
-    sellPrice: 0.048752500000000004,
-    profitePercent: 0.0019354344811499757
-  }
+//
+//  exchange.withdraw(targetSymbol, boughtAmount - fee, sellToAddress, {name: `${sellToId} address`})
+//
+////  let targetAmount = await api.waitForWithdrawComplete(sellExchange, boughtAmount, targetSymbol)
+////  console.log('targetAmount', targetAmount)
+//
+//}
 
-  await api.makeTrade(trade)
-//  await api.getPotentialTrades(tickersSortedByPrice, PRICE_DIFF)
+async function main() {
+  let exchange = new ccxt.binance()
+  await exchange.loadMarkets()
+  let result = exchange.currencies
+  console.log(exchange.currencies)
+  console.log(exchange.markets)
 }
+
+//console.log('tickersSortedByPrice', tickersSortedByPrice)
+//getPotentialTrades(tickersSortedByPrice)
+
 
 //console.log('tickersSortedByPrice', tickersSortedByPrice)
 main()
 //getPotentialTrades(tickersSortedByPrice)
-
-
-
-//(async () => {
-//  let ccxt = require('ccxt')
-//  const credentials = require('../credentials.js')
-//  let buyFromId = 'quadrigacx'
-////  let quadrigacx = new ccxt.quadrigacx ({'uid':'2951523', 'apiKey':'zfEKFeRDnq', 'secret': 'db08537dee388393d2555c2b9cf57bad'})
-//  let quadrigacx = new ccxt[buyFromId] (ccxt.extend({enableRateLimit: true}, credentials[buyFromId]))
-//  console.log (await quadrigacx.fetchBalance ());
-//}) ()

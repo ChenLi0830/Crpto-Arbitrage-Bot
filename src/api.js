@@ -483,6 +483,7 @@ async function step3(params){
     }
 
     try { // first time buy
+      buyFromBTCAmount = buyFromBTCAmount * 0.2 // todo: remove for production
       let maxAmount = buyFromBTCAmount * 0.999 / buyPrice
       log(`---    1st time purchase ${symbol} ${maxAmount} - `.green)
       let purchaseResult = params.simulate
@@ -504,6 +505,7 @@ async function step3(params){
       log(`-      balance result ${currencySymbol} ${buyFromBTCAmount}`.green)
       log(`---    fetching buyFrom btc balance - `.green)
 
+      buyFromBTCAmount = buyFromBTCAmount * 0.2 // todo: remove for production
       maxAmount = buyFromBTCAmount * 0.999 / buyPrice
       log(`---    2nd time purchase ${symbol} ${maxAmount} - `.green)
       purchaseResult = params.simulate
@@ -518,6 +520,7 @@ async function step3(params){
       log(`-      balance result ${currencySymbol} ${buyFromBTCAmount}`.green)
       log(`---    fetching buyFrom btc balance - `.green)
 
+      buyFromBTCAmount = buyFromBTCAmount * 0.2 // todo: remove for production
       maxAmount = buyFromBTCAmount * 0.999 / buyPrice
       log(`---    3rd time purchase ${symbol} ${maxAmount} - `.green)
       purchaseResult = params.simulate
@@ -645,6 +648,8 @@ async function step5 (params) {
     sellToTargetAmount,
   } = params
 
+  sellToTargetAmount = sellToTargetAmount * 0.2 // todo remove for production
+
   log(`------ Step5: Sell Target Currency for BTC at sellToExchange ------`)
 
   /** checkTradeBenefit */
@@ -672,6 +677,7 @@ async function step5 (params) {
   /** Sell target currency for BTC at sellTo exchange */
   try {
     if (sellToExchange.id === 'hitbtc2') {
+      log(`---    transfer fee for HitBTC`.green)
       let transferResult = await sellToExchange.private_post_account_transfer({'currency': targetSymbol, 'amount': sellToTargetAmount, 'type': 'bankToExchange'})
       log(`---    transferResult${JSON.stringify(transferResult)}`.green)
     }
@@ -733,6 +739,13 @@ async function step6(params) {
 
   /** transfer BTC back to source exchange */
   if (sellToId !== srcId) {
+
+    /** in case of hitbtc2, transfer func from exchange to main account */
+    if (sellToExchange.id === 'hitbtc2') {
+      let transferResult = await sellToExchange.private_post_account_transfer({'currency': currencySymbol, 'amount': sellToBTCAmount, 'type': 'exchangeToBank'})
+      log(`---    transferResult${JSON.stringify(transferResult)}`.green)
+    }
+
     let fee = 0
     if (sellToExchange.fees && sellToExchange.fees.funding && sellToExchange.fees.funding.withdraw) {
       fee = sellToExchange.fees.funding.withdraw[currencySymbol] || 0
@@ -840,7 +853,7 @@ async function waitForWithdrawComplete (exchange, amount, symbol='BTC') {
       }
       await sleep(10 * 1000)
     }
-    return reject('Transfer taking too long')
+    throw new MajorError('Transfer taking too long')
   })
 }
 

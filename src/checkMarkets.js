@@ -3,7 +3,6 @@ async function checkMarket(exchangeId){
   await getMarkets(exchangeId)
 }
 
-
-let exchangeId = 'huobipro'
+let exchangeId = 'binance'
 
 checkMarket(exchangeId)

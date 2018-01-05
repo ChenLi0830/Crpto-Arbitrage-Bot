@@ -235,9 +235,19 @@ async function useKlineStrategy(params){
           }
 
           boughtAmount += buyResult.info.executedQty
+
+          BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+          maxAmount = BTCAmount * 0.999 / weightedBuyPrice
+          buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
+          log(`Third buy result`, buyResult)
+          if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
+            throw new Error('Third purchase error!')
+          }
+
+          boughtAmount += buyResult.info.executedQty
         }
         catch (error) {
-          log(`Second buy error, relatively ok ${error}`.red)
+          log(`Second or third buy error, relatively ok ${error}`.red)
         }
 
         lastPickedTrade = pickedTrade
@@ -412,31 +422,31 @@ async function timeWalk(extractedInfoList){
     log(`---------- Running in Production ----------`.blue)
     await api.sleep(1000)
     while (true) {
-      await api.sleep(1000)
-      /**
-       * Read data and get currentTime
-       * */
-      delete require.cache[require.resolve('../savedData/klines/klines')]//Clear require cache
-      const extractedInfoList = require('../savedData/klines/klines')
-      const newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
-
-      /**
-       * Skip if extractedInfoList hasn't changed
-       * */
-      if (JSON.stringify(prevExtractedInfoList) === JSON.stringify(extractedInfoList)) {
-        log('No new data, Skip'.green)
-        continue
-      }
-      else {
-        prevExtractedInfoList = extractedInfoList
-      }
-
-      let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
-      console.log('timeEpoch', timeEpoch)
-      let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
-      log(`${currentTime}: ->`.green)
-
       try {
+        await api.sleep(1000)
+        /**
+         * Read data and get currentTime
+         * */
+        delete require.cache[require.resolve('../savedData/klines/klines')]//Clear require cache
+        const extractedInfoList = require('../savedData/klines/klines')
+        const newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
+
+        /**
+         * Skip if extractedInfoList hasn't changed
+         * */
+        if (_.eq(prevExtractedInfoList, extractedInfoList)) {
+          log('No new data, Skip'.green)
+          continue
+        }
+        else {
+          prevExtractedInfoList = extractedInfoList
+        }
+
+        let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
+        console.log('timeEpoch', timeEpoch)
+        let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
+        log(`${currentTime}: ->`.green)
+
         log(`---------- Fetching Balance ----------`.green)
         let money = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
         log(`---        BTC Balance - ${money}`.green)
@@ -456,8 +466,6 @@ async function timeWalk(extractedInfoList){
 
         money = klineResult.money
         log(`---------- Using Kline Strategy ---------- \n`.green)
-
-
 
         saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
 

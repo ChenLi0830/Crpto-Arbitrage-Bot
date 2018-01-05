@@ -10,16 +10,13 @@ const _ = require('lodash')
 const {saveJsonToCSV} = require('./utils')
 require('ansicolor').nice;
 const moment = require('moment')
-
+const credentials = require('../credentials')
+const {MinorError, MajorError} = require('./utils/errors')
 
 const {
-  interval,
-  intervalInMillesec,
   lineLength,
-  ohlcvIndex,
-  volumeIndex,
   windows
-} = require('./fetchKlines')
+} = require('./config')
 
 const KLINE_FILE = './savedData/klines/klines.js'
 const PICKED_TRADE = './savedData/pickedTrade.js'
@@ -133,14 +130,13 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
   }
 }
 
-function useKlineStrategy(params){
-  let {newExtractedInfoList, totalDataLength, lastPickedTrade, money, currentTime} = params
+async function useKlineStrategy(params){
+  let {newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange} = params
+  log(`useKlinePRODUCTION ${PRODUCTION}`)
   let pickedTrade = pickTradeUpdateFile(newExtractedInfoList)
 
   if (pickedTrade) {
     log('pickedTrade'.green, pickedTrade.symbol, pickedTrade.rate)
-//    log(currentTime)
-//    log(`${(totalDataLength - shift - lineLength) * Math.trunc(intervalInMillesec / (60 * 1000)) } mins ago from 10:00am`)
   }
 
   /** determine if sell */
@@ -168,41 +164,74 @@ function useKlineStrategy(params){
 
   /** make changes */
   if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline /*lostTooMuch || bigChangeInPrice || noLongerGoodTrade*/ ) {
-    newPlotDot = {
-      time: currentTime,
-      profit: lastPickedTrade ? potentialProfit : 'n/a',
-      rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
-      BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
-      volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
-      price: lastPickedTrade ? lastPickedTrade.closeLine[lineLength-1] : 'n/a',
-      volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
-      klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
-    }
+    if (PRODUCTION) {
+      log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline}`.yellow)
+      if (earnedEnough || dropThroughKline) {
+        log(`--- Selling ${lastPickedTrade.symbol}`.blue)
 
-    log(`earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline}`.yellow)
-    potentialProfit !== 0 && log(`money ${money} -> ${money * (1 + potentialProfit)}`.yellow)
+//        let sellResult = await exchange.createMarketSellOrder(symbol, sellToTargetAmount - fee)
+//        console.log('sellResult', console.log('sellResult'))
 
-    money = money * (1 + potentialProfit)
-    newPlotDot.value = money
+//        newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
+//        newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1],
+        lastPickedTrade = null
+      } else {
+        // buy in this symbol
+        lastPickedTrade = pickedTrade
+        log(`--- Buy in ${lastPickedTrade.symbol}}`.blue)
+        newPlotDot.event = `Buy in ${pickedTrade.symbol}`
+      }
 
-//    // buy in this symbol
-//    if (newTradeIsBetter) {
-//      lastPickedTrade = pickedTrade
-//      log(`Buy in ${lastPickedTrade.symbol}`.blue)
-//      newPlotDot.event = `Buy in ${pickedTrade.symbol}`
-//    } else {
-//      newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
-//      lastPickedTrade = null
-//    }
-    // buy in this symbol
-    if (earnedEnough || dropThroughKline) {
-      newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
-      newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1],
-      lastPickedTrade = null
-    } else {
-      lastPickedTrade = pickedTrade
-      log(`Buy in ${lastPickedTrade.symbol}}`.blue)
-      newPlotDot.event = `Buy in ${pickedTrade.symbol}`
+//      newPlotDot = {
+//        time: currentTime,
+//        profit: lastPickedTrade ? potentialProfit : 'n/a',
+//        rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
+//        BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
+//        volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
+//        price: lastPickedTrade ? lastPickedTrade.closeLine[lineLength-1] : 'n/a',
+//        volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
+//        klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
+//      }
+//
+//      newPlotDot.value = money
+
+    } else { // Time Walk Simulation
+      newPlotDot = {
+        time: currentTime,
+        profit: lastPickedTrade ? potentialProfit : 'n/a',
+        rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
+        BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
+        volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
+        price: lastPickedTrade ? lastPickedTrade.closeLine[lineLength-1] : 'n/a',
+        volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
+        klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
+      }
+
+      log(`earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline}`.yellow)
+      potentialProfit !== 0 && log(`money ${money} -> ${money * (1 + potentialProfit)}`.yellow)
+
+      money = money * (1 + potentialProfit)
+      newPlotDot.value = money
+
+      //    // buy in this symbol
+      //    if (newTradeIsBetter) {
+      //      lastPickedTrade = pickedTrade
+      //      log(`Buy in ${lastPickedTrade.symbol}`.blue)
+      //      newPlotDot.event = `Buy in ${pickedTrade.symbol}`
+      //    } else {
+      //      newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
+      //      lastPickedTrade = null
+      //    }
+      // buy in this symbol
+      if (earnedEnough || dropThroughKline) {
+        newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
+        newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1]
+        lastPickedTrade = null
+      } else {
+        lastPickedTrade = pickedTrade
+        log(`Buy in ${lastPickedTrade.symbol}}`)
+        newPlotDot.event = `Buy in ${pickedTrade.symbol}`
+      }
     }
   }
 
@@ -210,7 +239,7 @@ function useKlineStrategy(params){
 }
 
 function useVolumeStrategy(params) {
-  let {newExtractedInfoList, totalDataLength, lastPickedTradeList, money, currentTime} = params
+  let {newExtractedInfoList, lastPickedTradeList, money, currentTime} = params
   let sortedByVol = _.sortBy(newExtractedInfoList, o => - (o.volumeLine[lineLength-1] * o.closeLine[lineLength-1]))
 //  console.log('sortedByVol', sortedByVol.map(info => info.volumeLine[lineLength-1] * info.closeLine[lineLength-1]).join(' '))
 
@@ -240,13 +269,12 @@ function useVolumeStrategy(params) {
   return {lastPickedTradeList, money, newPlotDot}
 }
 
-function timeWalk(extractedInfoList){
+async function timeWalk(extractedInfoList){
   let shift = 0
   let money = 100
   let lastPickedTrade = null // for kline strategy
   let lastPickedTradeList = [] // for volume strategy
   let plot = []//{time, value, event, profit, rate, BTCvolume}
-  let totalDataLength = extractedInfoList[0].volumeLine.length
 
   while (shift + lineLength < extractedInfoList[0].volumeLine.length) {
     let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
@@ -285,13 +313,13 @@ function timeWalk(extractedInfoList){
     log(Object.keys(newExtractedInfoList[0]).join(' '))
 
     /** useKlineStrategy */
-    let klineResult = useKlineStrategy({newExtractedInfoList, totalDataLength, lastPickedTrade, money, currentTime})
+    let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime})
     lastPickedTrade = klineResult.lastPickedTrade
     money = klineResult.money
     let newPlotDot = klineResult.newPlotDot
 
 //    /** volumeStrategy */
-//    let volumeResult = useVolumeStrategy({newExtractedInfoList, totalDataLength, lastPickedTradeList, money, currentTime})
+//    let volumeResult = useVolumeStrategy({newExtractedInfoList, lastPickedTradeList, money, currentTime})
 //    lastPickedTradeList = volumeResult.lastPickedTradeList
 //    money = volumeResult.money
 //    let newPlotDot = volumeResult.newPlotDot
@@ -308,20 +336,76 @@ function timeWalk(extractedInfoList){
 }
 
 (async function main () {
-  while (true) { // keep fetching
-    //    await api.sleep(intervalInMillesec * 0.6)
-    try {
-            const extractedInfoList = require('../savedData/klines/klines')
+  let PRODUCTION = process.env.PRODUCTION
+  log(`PRODUCTION ${PRODUCTION}`.red)
+  if (PRODUCTION) {
+    /**
+     * Production
+     * */
+    let lastPickedTrade = null // for kline strategy
+    let lastPickedTradeList = [] // for volume strategy
+    let plot = []//{time, value, event, profit, rate, BTCvolume}
+    let prevExtractedInfoList = null
+    let exchangeId = 'binance'
+    let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials[exchangeId]))
 
-      //      let sortedPool = rateAndSort(extractedInfoList)
-      //      log(`sortedPool`, sortedPool)
-            timeWalk(extractedInfoList)
+    log(`---------- Running in Production ----------`.blue)
+    await api.sleep(1000)
+    while (true) {
+      await api.sleep(1000)
+      /**
+       * Read data and get currentTime
+       * */
+      delete require.cache[require.resolve('../savedData/klines/klines')]//Clear require cache
+      const extractedInfoList = require('../savedData/klines/klines')
 
-    } catch (e) {
-      console.error(e)
+      let timeEpoch = extractedInfoList[0].timeLine[lineLength-1]
+      let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
+      log(`${currentTime}: ->`.green)
+
+      /**
+       * Skip if extractedInfoList hasn't changed
+       * */
+      if (JSON.stringify(prevExtractedInfoList) === JSON.stringify(extractedInfoList)) {
+        log('No new data, Skip'.green)
+        continue
+      }
+
+      try {
+        log(`---------- Fetching Balance ----------`.green)
+        let money = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+        log(`---        BTC Balance - ${money}`.green)
+        log(`---------- Fetching Balance ---------- \n`.green)
+
+        log(`---------- Using Kline Strategy ---------- `.green)
+        let klineResult = await useKlineStrategy({extractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange})
+        lastPickedTrade = klineResult.lastPickedTrade
+        money = klineResult.money
+        let newPlotDot = klineResult.newPlotDot
+        log(`---------- Using Kline Strategy ---------- \n`.green)
+
+        if (!!newPlotDot) {
+          plot.push(newPlotDot)
+        }
+
+        saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
+
+      } catch (error) {
+        console.error('Major error', error)
+        log(error.message.red)
+        log('Stop trading. Await for admin to determine next step'.red)
+        break
+      }
     }
-
-    break // Todo remove in production
+  }
+  else {
+    /**
+     * TimeWalk simulation
+     * */
+    const extractedInfoList = require('../savedData/klines/klines')
+    await timeWalk(extractedInfoList)
   }
   process.exit()
 })()
+
+//module.exports =

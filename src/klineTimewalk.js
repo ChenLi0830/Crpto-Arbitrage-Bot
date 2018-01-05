@@ -226,6 +226,7 @@ async function useKlineStrategy(params){
 //        todo get order Id and clientOrderId
 
         try {
+          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
           let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Second buy result`, buyResult)

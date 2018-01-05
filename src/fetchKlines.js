@@ -19,7 +19,7 @@ require('ansicolor').nice;
 const interval = '5m'
 const intervalInMillesec = 5 * 60 * 1000
 const recordNb = 500 // default = 500, use less for large intervals
-const numberOfFetch = 5 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
+const numberOfFetch = 2 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
 const windows = [4, 16, 99] // 必须从小到大，maximum = 500 - lineLength
 const lineLength = 50
 
@@ -65,7 +65,10 @@ function printLine(lineData){
 //        await api.sleep (exchange.rateLimit)
         let klines = {}
         let volumeLine = []
-        let priceLine = []
+        let closeLine = []
+        let openLine = []
+        let highLine = []
+        let lowLine = []
         let timeLine = []
         let symbolInvalid = false
 
@@ -110,7 +113,11 @@ function printLine(lineData){
           /** get volumeLine */
           volumeLine = ohlcv.slice(-totalKlinelength).map(x => x[volumeIndex])
           /** get priceLine */
-          priceLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
+          closeLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
+          openLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
+          highLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
+          lowLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
+
           /** get timeLine */
           timeLine = ohlcv.slice(-totalKlinelength).map(x => x[timeIndex])
 
@@ -118,7 +125,10 @@ function printLine(lineData){
             symbol,
             klines,
             volumeLine,
-            priceLine,
+            closeLine,
+            openLine,
+            highLine,
+            lowLine,
             timeLine,
           })
         }

@@ -167,7 +167,7 @@ function useKlineStrategy(params){
   let newPlotDot = null
 
   /** make changes */
-  if ((!lastPickedTrade && pickedTrade) || /*lostTooMuch ||*/ earnedEnough /* || bigChangeInPrice || noLongerGoodTrade*/ || dropThroughKline) {
+  if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline /*lostTooMuch || bigChangeInPrice || noLongerGoodTrade*/ ) {
     newPlotDot = {
       time: currentTime,
       profit: lastPickedTrade ? potentialProfit : 'n/a',
@@ -195,7 +195,7 @@ function useKlineStrategy(params){
 //      lastPickedTrade = null
 //    }
     // buy in this symbol
-    if (dropThroughKline) {
+    if (earnedEnough || dropThroughKline) {
       newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
       newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1],
       lastPickedTrade = null

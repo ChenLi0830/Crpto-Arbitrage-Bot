@@ -26,30 +26,36 @@ const PICKED_TRADE = './savedData/pickedTrade.js'
 const PLOT_CSV_FILE = './savedData/klines/plotCsv.csv'
 
 //-----------------------------------------------------------------------------
-function checkValueCriteria(klines, index, priceLine) {
+function checkValueCriteria(klines, index, closeLine) {
   let isFastKlineLarger = (klines[windows[0]][index] > klines[windows[1]][index]) && (klines[windows[0]][index] > klines[windows[2]][index])
   let isMiddleKlineLarger = klines[windows[1]][index] > klines[windows[2]][index]
-  let priceGreaterThanFastKline = priceLine[index] > klines[windows[0]][index]
+  let priceGreaterThanFastKline = closeLine[index] > klines[windows[0]][index]
 
   return isFastKlineLarger && isMiddleKlineLarger && priceGreaterThanFastKline
 }
 
-function checkBuyingCriteria(klines, volumeLine, priceLine) {
+function checkVolCriteria(volumeLine){
   let isVolumeIncreaseFast = (volumeLine[lineLength-1] / volumeLine[lineLength-2]) > 1
   let volumeAvg = _.mean(volumeLine.slice(-20))
   let isVolumeHigherThanAvg = volumeLine[lineLength - 1] > volumeAvg
+  return isVolumeIncreaseFast && isVolumeHigherThanAvg
+}
+
+function checkBuyingCriteria(klines, volumeLine, closeLine, openLine) {
+  let matchVolCriteria = checkVolCriteria(volumeLine)
+  let isPricesHigherThanPrevPoint = (closeLine[lineLength - 1] > closeLine[lineLength - 2]) && (openLine[lineLength - 1] > openLine[lineLength - 2])
 //  let isFastKlineIncreaseFast = (klines[windows[0]][lineLength-1] / klines[windows[0]][lineLength-2]) > 1.1
 
   let currentPoint = lineLength-1
   let prevPoint = lineLength-2
 
-  let nowValueMatchCriteria = checkValueCriteria(klines, currentPoint, priceLine)
+  let nowValueMatchCriteria = checkValueCriteria(klines, currentPoint, closeLine)
 //  let prevValueMatchCriteria = checkValueCriteria(klines, prevPoint)
 
   //  log(`nowMatchCriteria`, nowMatchCriteria)
   //  log(`prevMatchCriteria`, prevMatchCriteria)
 
-  return nowValueMatchCriteria /*&& !prevValueMatchCriteria*/ && isVolumeIncreaseFast && isVolumeHigherThanAvg //&& isFastKlineIncreaseFast
+  return nowValueMatchCriteria && matchVolCriteria && isPricesHigherThanPrevPoint/*&& !prevValueMatchCriteria*/  //&& isFastKlineIncreaseFast
 }
 
 function rateCurrency(klines, volumeLine) {
@@ -72,8 +78,8 @@ function rateAndSort(extractedInfoList) {
   let buyingPool = []
 
   for (let extractedInfo of extractedInfoList) {
-    const {klines, volumeLine, priceLine} = extractedInfo
-    let matchBuyingCriteria = checkBuyingCriteria(klines, volumeLine, priceLine)
+    const {klines, volumeLine, closeLine, openLine} = extractedInfo
+    let matchBuyingCriteria = checkBuyingCriteria(klines, volumeLine, closeLine, openLine)
 
     if (matchBuyingCriteria) {
       let rate = rateCurrency(klines, volumeLine)
@@ -112,13 +118,13 @@ function isNewTradeBetter(pickedTrade, lastPickedTrade){
 
 function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
   if (lastPickedTrade) {
-    let purchasePrice = lastPickedTrade.priceLine.slice(-1)[0]
-    let sellPrice = lastTradeCurrentState.priceLine.slice(-1)[0]
+    let purchasePrice = lastPickedTrade.closeLine.slice(-1)[0]
+    let sellPrice = lastTradeCurrentState.closeLine.slice(-1)[0]
 //    if (purchasePrice > sellPrice) {
 //      log(`${lastPickedTrade.symbol}: purchase ${purchasePrice} -> sell ${sellPrice}`.yellow)
 //    }
 
-    //          lastTradeCurrentState.priceLine.slice(-1)[0]
+    //          lastTradeCurrentState.closeLine.slice(-1)[0]
 
     let profitPercent = (sellPrice - purchasePrice) / purchasePrice
     return profitPercent
@@ -145,12 +151,12 @@ function useKlineStrategy(params){
   /** get conditions */
   let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState) : 0
 //  let lostTooMuch = potentialProfit < -0.03
-  let dropThroughKline = lastPickedTrade ? lastTradeCurrentState.priceLine[lineLength-1] < lastTradeCurrentState.klines[windows[0]][lineLength-1] : false
-//  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.priceLine[lineLength-1] - lastTradeCurrentState.priceLine[lineLength-2])/lastTradeCurrentState.priceLine[lineLength-1] : 0
+  let dropThroughKline = lastPickedTrade ? lastTradeCurrentState.closeLine[lineLength-1] < lastTradeCurrentState.klines[windows[0]][lineLength-1] : false
+//  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[lineLength-1] - lastTradeCurrentState.closeLine[lineLength-2])/lastTradeCurrentState.closeLine[lineLength-1] : 0
 //  let bigChangeInPrice = recentPriceDiff < -0.03
   let earnedEnough = potentialProfit >= 0.50
 //  let noLongerGoodTrade = lastPickedTrade
-//    ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1, lastTradeCurrentState.priceLine )
+//    ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1, lastTradeCurrentState.closeLine )
 //    : false
 
 //  /** determine if change */
@@ -166,9 +172,9 @@ function useKlineStrategy(params){
       time: currentTime,
       profit: lastPickedTrade ? potentialProfit : 'n/a',
       rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
-      BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.priceLine[lineLength-1] : 'n/a',
+      BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
       volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
-      price: lastPickedTrade ? lastPickedTrade.priceLine[lineLength-1] : 'n/a',
+      price: lastPickedTrade ? lastPickedTrade.closeLine[lineLength-1] : 'n/a',
       volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
       klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
     }
@@ -191,7 +197,7 @@ function useKlineStrategy(params){
     // buy in this symbol
     if (dropThroughKline) {
       newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
-      newPlotDot.sellPrice = lastTradeCurrentState.priceLine[lineLength-1],
+      newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1],
       lastPickedTrade = null
     } else {
       lastPickedTrade = pickedTrade
@@ -205,8 +211,8 @@ function useKlineStrategy(params){
 
 function useVolumeStrategy(params) {
   let {newExtractedInfoList, totalDataLength, lastPickedTradeList, money, currentTime} = params
-  let sortedByVol = _.sortBy(newExtractedInfoList, o => - (o.volumeLine[lineLength-1] * o.priceLine[lineLength-1]))
-//  console.log('sortedByVol', sortedByVol.map(info => info.volumeLine[lineLength-1] * info.priceLine[lineLength-1]).join(' '))
+  let sortedByVol = _.sortBy(newExtractedInfoList, o => - (o.volumeLine[lineLength-1] * o.closeLine[lineLength-1]))
+//  console.log('sortedByVol', sortedByVol.map(info => info.volumeLine[lineLength-1] * info.closeLine[lineLength-1]).join(' '))
 
   let firstFive = sortedByVol.slice(0, 5)
   log('firstFive.length', firstFive.length, firstFive.map(info => info.symbol).join(' '))
@@ -252,7 +258,10 @@ function timeWalk(extractedInfoList){
       /** newVolumes */
       let newVolumes = extractedInfo.volumeLine.slice(shift, shift + lineLength)
       /** newPrices */
-      let newPrices = extractedInfo.priceLine.slice(shift, shift + lineLength)
+      let newCloseLine = extractedInfo.closeLine.slice(shift, shift + lineLength)
+      let newOpenLine = extractedInfo.openLine.slice(shift, shift + lineLength)
+      let newHighLine = extractedInfo.highLine.slice(shift, shift + lineLength)
+      let newLowLine = extractedInfo.lowLine.slice(shift, shift + lineLength)
       /** newTimes */
       let newTimes = extractedInfo.timeLine.slice(shift, shift + lineLength)
 
@@ -260,7 +269,10 @@ function timeWalk(extractedInfoList){
         ...extractedInfo,
         klines: newKlines,
         volumeLine: newVolumes,
-        priceLine: newPrices,
+        closeLine: newCloseLine,
+        openLine: newOpenLine,
+        highLine: newHighLine,
+        lowLine: newLowLine,
         timeLine: newTimes,
       }
     })
@@ -269,6 +281,8 @@ function timeWalk(extractedInfoList){
     let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
+
+    log(Object.keys(newExtractedInfoList[0]).join(' '))
 
     /** useKlineStrategy */
     let klineResult = useKlineStrategy({newExtractedInfoList, totalDataLength, lastPickedTrade, money, currentTime})

@@ -28,6 +28,7 @@ const volumeIndex = 5
 const timeIndex = 0
 const KLINE_FILE = './savedData/klines/klines.js'
 const PICKED_TRADE = './savedData/pickedTrade.js'
+let blackList = ['TRX/BTC', 'XRP/BTC', 'BCC/BTC', 'AION/BTC']
 //-----------------------------------------------------------------------------
 
 function getAverage(ohlcv, window, ohlcvIndex){
@@ -75,11 +76,16 @@ function printLine(lineData){
         if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
           log(`processing ${symbol}`.green)
 
+          if (blackList.includes(symbol)) {
+            log(`${symbol} is in blacklist, skipping it`.yellow)
+            continue
+          }
+
           let ohlcv = await exchange.fetchOHLCV(symbol, interval, undefined, recordNb)
 
           if (ohlcv.length < recordNb){
-            log(`symbol ${symbol} doesn't have that much history data, ignoring it`.yellow)
-            symbolInvalid = true
+            log(`symbol ${symbol} doesn't have that much history data, skipping it`.yellow)
+            continue
           }
 
 //         if numberOfFetch > 0 , 获取更多历史数据

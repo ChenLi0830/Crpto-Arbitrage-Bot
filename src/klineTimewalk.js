@@ -18,7 +18,7 @@ const {
   windows
 } = require('./config')
 
-const KLINE_FILE = './savedData/klines/klines.js'
+const KLINE_FILE = './savedData/klines/klines.js' // todo production时使用不同的文件名 `...${production}.js`
 const PICKED_TRADE = './savedData/pickedTrade.js'
 const PLOT_CSV_FILE = './savedData/klines/plotCsv.csv'
 
@@ -163,30 +163,75 @@ async function useKlineStrategy(params){
 
   /** make changes */
   if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline /*lostTooMuch || bigChangeInPrice || noLongerGoodTrade*/ ) {
-    newPlotDot = {
-      time: currentTime,
-      rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
-      BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
-      volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
-      volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
-      klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
-    }
+    log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline}`.yellow)
+
     if (PRODUCTION) {
-      log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline}`.yellow)
+      let newPlotDot = {
+        time: currentTime,
+        rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
+        BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
+        volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
+        volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
+        klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
+      }
+
       if (earnedEnough || dropThroughKline) {
+        /*
+        * 卖币
+        * */
         log(`--- Selling ${lastPickedTrade.symbol}`.blue)
 
-//        let sellResult = await exchange.createMarketSellOrder(symbol, sellToTargetAmount - fee)
-//        console.log('sellResult', console.log('sellResult'))
+        let symbol = lastPickedTrade.symbol
+        let targetCurrency = symbol.split('/')[0]
+        let targetBalance = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free'][targetCurrency]
+        log(`--- ${targetCurrency} balance ${targetBalance}`.green)
 
-//        newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
-//        newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1],
+        log(`--- Start Selling`.blue)
+        let sellResult = await exchange.createMarketSellOrder(symbol, targetBalance)
+        log(`--- Selling Result`.blue, sellResult)
+
         lastPickedTrade = null
-      } else {
-        // buy in this symbol
+
+        let newBTCBalance = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+        log(`--- newBTCBalance ${newBTCBalance}`)
+
+        newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
+        newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1] // todo 换成实际价格
+        newPlotDot.value = newBTCBalance
+      }
+      else {
+        /*
+        * 买币
+        * */
+        let symbol = pickedTrade.symbol
+        let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+        let ticker = await exchange.fetchTicker(symbol)
+        log('ticker', ticker)
+        let weightedBuyPrice = api.weightedPrice(ticker.asks, BTCVol)
+
+        log(`--- Buy in ${lastPickedTrade.symbol} at ${weightedBuyPrice} with BTCAmount ${BTCAmount}`.blue)
+
+        /**
+         * 买两次，避免买不到
+         * */
+        let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
+        let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
+        log(` buy result`, buyResult)
+
+        try {
+          let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
+          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
+          log(`Second buy result`, buyResult)
+        }
+        catch (error) {
+          log(`Second buy error, relatively ok ${error}`.red)
+        }
+
         lastPickedTrade = pickedTrade
-        log(`--- Buy in ${lastPickedTrade.symbol}`.blue)
+
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
+        newPlotDot.price = weightedBuyPrice // todo 换成实际价格
+        newPlotDot.value = money
       }
 
 //      newPlotDot = {
@@ -195,9 +240,9 @@ async function useKlineStrategy(params){
 //        rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
 //        BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
 //        volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
-//        price: lastPickedTrade ? lastPickedTrade.closeLine[lineLength-1] : 'n/a',
 //        volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
 //        klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
+//        price: lastPickedTrade ? lastPickedTrade.closeLine[lineLength-1] : 'n/a',
 //      }
 //
 //      newPlotDot.value = money
@@ -371,11 +416,6 @@ async function timeWalk(extractedInfoList){
       const extractedInfoList = require('../savedData/klines/klines')
       const newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
 
-      let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
-      console.log('timeEpoch', timeEpoch)
-      let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
-      log(`${currentTime}: ->`.green)
-
       /**
        * Skip if extractedInfoList hasn't changed
        * */
@@ -383,6 +423,14 @@ async function timeWalk(extractedInfoList){
         log('No new data, Skip'.green)
         continue
       }
+      else {
+        prevExtractedInfoList = extractedInfoList
+      }
+
+      let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
+      console.log('timeEpoch', timeEpoch)
+      let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
+      log(`${currentTime}: ->`.green)
 
       try {
         log(`---------- Fetching Balance ----------`.green)
@@ -400,6 +448,9 @@ async function timeWalk(extractedInfoList){
 
         if (!!newPlotDot) {
           plot.push(newPlotDot)
+          if (plot[plot.length-1].value !== plot[plot.length-2].value) {
+            log(`BTC balance: ${plot[plot.length-2]} -> ${plot[plot.length-1].value}`)
+          }
         }
 
         saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)

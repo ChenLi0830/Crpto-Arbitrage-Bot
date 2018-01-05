@@ -865,6 +865,7 @@ module.exports = {
   getPotentialTrades,
   makeTrade,
   getAddress,
+  weightedPrice,
   waitForWithdrawComplete
 }
 

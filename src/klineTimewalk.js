@@ -369,7 +369,7 @@ async function timeWalk(extractedInfoList){
        * */
       delete require.cache[require.resolve('../savedData/klines/klines')]//Clear require cache
       const extractedInfoList = require('../savedData/klines/klines')
-      const newExtractedInfoList = cutExtractedInfoList(extractedInfoList, 0, lineLength)
+      const newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
 
       let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
       console.log('timeEpoch', timeEpoch)

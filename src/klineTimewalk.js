@@ -166,7 +166,7 @@ async function useKlineStrategy(params){
     log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline}`.yellow)
 
     if (PRODUCTION) {
-      let newPlotDot = {
+      newPlotDot = {
         time: currentTime,
         rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
         BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
@@ -190,14 +190,15 @@ async function useKlineStrategy(params){
         let sellResult = await exchange.createMarketSellOrder(symbol, targetBalance)
         log(`--- Selling Result`.blue, sellResult)
 
-        lastPickedTrade = null
-
         let newBTCBalance = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
         log(`--- newBTCBalance ${newBTCBalance}`)
 
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
-        newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1] // todo 换成实际价格
+        let askPrice = (await exchange.fetchL2OrderBook(symbol)).asks[0]
+        newPlotDot.sellPrice = askPrice
         newPlotDot.value = newBTCBalance
+
+        lastPickedTrade = null
       }
       else {
         /*
@@ -205,23 +206,34 @@ async function useKlineStrategy(params){
         * */
         let symbol = pickedTrade.symbol
         let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
-        let ticker = await exchange.fetchTicker(symbol)
-        log('ticker', ticker)
-        let weightedBuyPrice = api.weightedPrice(ticker.asks, BTCVol)
+        let orderBook = await exchange.fetchL2OrderBook(symbol)
 
-        log(`--- Buy in ${lastPickedTrade.symbol} at ${weightedBuyPrice} with BTCAmount ${BTCAmount}`.blue)
+        let weightedBuyPrice = api.weightedPrice(orderBook.asks, BTCAmount).tradePrice
+
+        log(`--- Buy in ${pickedTrade.symbol} at ${weightedBuyPrice} with BTCAmount ${BTCAmount}`.blue)
 
         /**
          * 买两次，避免买不到
          * */
         let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
         let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
-        log(` buy result`, buyResult)
+        console.log('buyResult', buyResult)
+        if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
+          throw new Error('Purchase error!')
+        }
+
+        let boughtAmount = buyResult.info.executedQty
+//        todo get order Id and clientOrderId
 
         try {
           let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
           let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Second buy result`, buyResult)
+          if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
+            throw new Error('Second purchase error!')
+          }
+
+          boughtAmount += buyResult.info.executedQty
         }
         catch (error) {
           log(`Second buy error, relatively ok ${error}`.red)
@@ -229,23 +241,14 @@ async function useKlineStrategy(params){
 
         lastPickedTrade = pickedTrade
 
-        newPlotDot.event = `Buy in ${pickedTrade.symbol}`
-        newPlotDot.price = weightedBuyPrice // todo 换成实际价格
-        newPlotDot.value = money
-      }
+        let newBTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+        let spentBTC = BTCAmount - newBTCAmount
+        log(`---    spent ${Math.trunc(100 * spentBTC/BTCAmount)}% in purchase, average purchase price ${spentBTC / boughtAmount}`)
 
-//      newPlotDot = {
-//        time: currentTime,
-//        profit: lastPickedTrade ? potentialProfit : 'n/a',
-//        rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
-//        BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
-//        volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
-//        volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
-//        klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
-//        price: lastPickedTrade ? lastPickedTrade.closeLine[lineLength-1] : 'n/a',
-//      }
-//
-//      newPlotDot.value = money
+        newPlotDot.event = `Buy in ${pickedTrade.symbol}`
+        newPlotDot.price = (spentBTC / boughtAmount) // todo 换成实际价格
+        newPlotDot.value = BTCAmount
+      }
 
     } else { // Time Walk Simulation
       newPlotDot = {
@@ -442,16 +445,18 @@ async function timeWalk(extractedInfoList){
         let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange})
 
         lastPickedTrade = klineResult.lastPickedTrade
-        money = klineResult.money
         let newPlotDot = klineResult.newPlotDot
-        log(`---------- Using Kline Strategy ---------- \n`.green)
-
         if (!!newPlotDot) {
           plot.push(newPlotDot)
-          if (plot[plot.length-1].value !== plot[plot.length-2].value) {
-            log(`BTC balance: ${plot[plot.length-2]} -> ${plot[plot.length-1].value}`)
+          if (newPlotDot.value !== money) {
+            log(`BTC balance: ${money} -> ${newPlotDot.value}`)
           }
         }
+
+        money = klineResult.money
+        log(`---------- Using Kline Strategy ---------- \n`.green)
+
+
 
         saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
 

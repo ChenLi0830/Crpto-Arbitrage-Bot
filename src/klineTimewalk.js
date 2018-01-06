@@ -144,6 +144,7 @@ function pickTradeFromList(newExtractedInfoList, whiteList){
   let sortedPool = rateAndSort(newExtractedInfoList, whiteList)
   if (sortedPool.length > 0) {
 //    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
+    log('Picking from list: '.green, sortedPool.map(o => o.symbol).join(' '))
     let pickedTrade
 //    if (sortedPool[0].rate > 20){
       pickedTrade  = sortedPool[0]
@@ -535,7 +536,6 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
          * 只看topVibrated的那几个
          * */
         let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
-        console.log('topVibrated', whiteList)
 
         let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
@@ -552,9 +552,9 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
           if (newPlotDot.value !== money) {
             log(`BTC balance: ${money} -> ${newPlotDot.value}`)
           }
+          console.log('plot', plot)
           saveJsonToCSV(plot, ['time', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'event', 'price', 'sellPrice', 'value'], PLOT_CSV_FILE)
         }
-        console.log('plot', plot)
         money = klineResult.money
         log(`---------- Using Kline Strategy ---------- \n`.green)
 

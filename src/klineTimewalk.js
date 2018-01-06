@@ -27,20 +27,31 @@ const PLOT_CSV_FILE = './savedData/klines/plotCsv.csv'
 /**
  * Get top vibrated
  * */
-function getTopVibrated(extractedInfoList, topVibratedNo){
+function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
   for ( let extractedInfo of extractedInfoList ) {
     if (!extractedInfo) {
       console.log('undefined', extractedInfo)
 //      console.log('extractedInfoList', extractedInfoList)
     }
     let meanClose = _.mean(extractedInfo.closeLine)
-    let meanSquareError = 0
-    for (let price of extractedInfo.closeLine) {
-      meanSquareError = meanSquareError + Math.pow((price - meanClose)/meanClose, 2)
+//    let meanSquareError = 0
+//    for (let price of extractedInfo.closeLine) {
+//      meanSquareError = meanSquareError + Math.pow((price - meanClose)/meanClose, 2)
+//    }
+    let infoLength = extractedInfo.closeLine.length
+    let vibrateValue = 0
+    for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
+      /**
+       * 只看增长部分
+       * */
+      let increaseValue = (extractedInfo.closeLine[i] - extractedInfo.closeLine[i-1]) / extractedInfo.closeLine[i-1]
+      if (increaseValue > 0) {
+        vibrateValue += increaseValue
+      }
     }
-    extractedInfo.meanSquareError = meanSquareError
+    extractedInfo.vibrateValue = vibrateValue
   }
-  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.meanSquareError)
+  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.vibrateValue)
 //  log(sortedExtractedInfoList.map(o => `${o.symbol}`).join(' '))
 
   return sortedExtractedInfoList.map(o => `${o.symbol}`).slice(0, topVibratedNo)
@@ -419,15 +430,15 @@ async function timeWalk(extractedInfoList){
   let lastPickedTradeList = [] // for volume strategy
   let plot = []//{time, value, event, profit, rate, BTCvolume}
 
-  let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
-  console.log('topVibrated', whiteList)
-
   while (shift + lineLength < extractedInfoList[0].volumeLine.length) {
     let newExtractedInfoList = cutExtractedInfoList (extractedInfoList, shift, lineLength)
     fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
     let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
+
+    let whiteList = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
+    console.log('topVibrated', whiteList)
 
     /** useKlineStrategy */
     let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})
@@ -535,7 +546,9 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
         /**
          * 只看topVibrated的那几个
          * */
-        let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
+//        let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
+        let whiteList = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
+        console.log('topVibrated', whiteList)
 
         let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')

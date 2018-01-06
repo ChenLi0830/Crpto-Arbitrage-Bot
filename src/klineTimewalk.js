@@ -11,7 +11,6 @@ const moment = require('moment')
 const credentials = require('../credentials')
 const {MinorError, MajorError} = require('./utils/errors')
 const utils = require('./utils')
-let reload = require('require-reload')(require)
 
 const {
   lineLength,
@@ -498,10 +497,11 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
         /**
          * Read data and get currentTime
          * */
-        let cachedModule = require.cache[require.resolve('../savedData/klines/klines')];
+
+        let cachedModule = require.cache[require.resolve('../savedData/klines/klines')]
         if (cachedModule) {
-          delete cachedModule.parent.children
-          delete cachedModule
+          delete require.cache[require.resolve('../savedData/klines/klines')].parent.children//Clear require cache
+          delete require.cache[require.resolve('../savedData/klines/klines')]
         }
         const extractedInfoList = require('../savedData/klines/klines')
 
@@ -522,7 +522,8 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
         /**
          * Skip if extractedInfoList hasn't changed
          * */
-        if (checkInfoChanged(prevExtractedInfoList, extractedInfoList)) {
+        if (JSON.stringify(prevExtractedInfoList) === JSON.stringify(extractedInfoList)) {
+//        if (checkInfoChanged(prevExtractedInfoList, extractedInfoList)) {
           log('No new data, Skip'.green)
           continue
         }

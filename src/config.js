@@ -21,6 +21,7 @@ module.exports = {
   PICKED_TRADE : './savedData/pickedTrade.js',
 //  KLINE_FILE : `./savedData/klines/klines-${process.env.production ? '':'-simulate'}.js`,
 //  PICKED_TRADE : `./savedData/pickedTrade-${process.env.production ? '':'-simulate'}.js`,
-  blackList : [], //['TRX/BTC', 'XRP/BTC', 'BCC/BTC', 'AION/BTC', 'ARN/BTC', 'AST/BTC'],
-  whiteList: ['ARN/BTC'],
+  blackList : [],
+//  whiteList: ['ARN/BTC', 'TRX/BTC', 'XRP/BTC', 'ETH/BTC', 'BNB/BTC'],
+  topVibratedNo: 5,
 }

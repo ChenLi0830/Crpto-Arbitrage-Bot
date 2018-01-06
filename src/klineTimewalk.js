@@ -15,7 +15,8 @@ const {MinorError, MajorError} = require('./utils/errors')
 
 const {
   lineLength,
-  windows
+  windows,
+  topVibratedNo
 } = require('./config')
 
 const KLINE_FILE = './savedData/klines/klines.js' // todo production时使用不同的文件名 `...${production}.js`
@@ -23,6 +24,30 @@ const PICKED_TRADE = './savedData/pickedTrade.js'
 const PLOT_CSV_FILE = './savedData/klines/plotCsv.csv'
 
 //-----------------------------------------------------------------------------
+
+/**
+ * Get top vibrated
+ * */
+function getTopVibrated(extractedInfoList, topVibratedNo){
+  for ( let extractedInfo of extractedInfoList ) {
+    if (!extractedInfo) {
+      console.log('undefined', extractedInfo)
+//      console.log('extractedInfoList', extractedInfoList)
+    }
+    let meanClose = _.mean(extractedInfo.closeLine)
+    let meanSquareError = 0
+    for (let price of extractedInfo.closeLine) {
+      meanSquareError = meanSquareError + Math.pow((price - meanClose)/meanClose, 2)
+    }
+    extractedInfo.meanSquareError = meanSquareError
+  }
+  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.meanSquareError)
+//  log(sortedExtractedInfoList.map(o => `${o.symbol}`).join(' '))
+
+  return sortedExtractedInfoList.map(o => `${o.symbol}`).slice(0, topVibratedNo)
+//  return sortedExtractedInfoList.slice(topVibratedNo)
+}
+
 function checkValueCriteria(klines, index, closeLine) {
   let isFastKlineLarger = (klines[windows[0]][index] > klines[windows[1]][index]) && (klines[windows[0]][index] > klines[windows[2]][index])
   let isMiddleKlineLarger = klines[windows[1]][index] > klines[windows[2]][index]
@@ -52,6 +77,9 @@ function checkVolCriteria(volumeLine){
 function checkBuyingCriteria(klines, volumeLine, closeLine, openLine) {
   let matchVolCriteria = checkVolCriteria(volumeLine)
   let isPricesHigherThanPrevPoint = (closeLine[lineLength - 1] > closeLine[lineLength - 2]) && (openLine[lineLength - 1] > openLine[lineLength - 2])
+//  if (isPricesHigherThanPrevPoint) {
+//    log(closeLine[lineLength - 1], closeLine[lineLength - 2], openLine[lineLength - 1], openLine[lineLength - 2])
+//  }
 //  let isFastKlineIncreaseFast = (klines[windows[0]][lineLength-1] / klines[windows[0]][lineLength-2]) > 1.1
 
   let currentPoint = lineLength-1
@@ -82,10 +110,17 @@ function rateCurrency(klines, volumeLine) {
   return rate
 }
 
-function rateAndSort(extractedInfoList) {
+function rateAndSort(extractedInfoList, whiteList) {
   let buyingPool = []
 
   for (let extractedInfo of extractedInfoList) {
+    /**
+    * 白名单过滤 - 选择振动最强的
+    * */
+    if (whiteList && whiteList.length > 0 && !whiteList.includes(extractedInfo.symbol)) {
+      continue
+    }
+
     const {klines, volumeLine, closeLine, openLine} = extractedInfo
     let matchBuyingCriteria = checkBuyingCriteria(klines, volumeLine, closeLine, openLine)
 
@@ -106,8 +141,8 @@ function printLine(lineData){
   log.yellow('\n' + chart, '\n')
 }
 
-function pickTradeUpdateFile(newExtractedInfoList){
-  let sortedPool = rateAndSort(newExtractedInfoList)
+function pickTradeUpdateFile(newExtractedInfoList, whiteList){
+  let sortedPool = rateAndSort(newExtractedInfoList, whiteList)
   if (sortedPool.length > 0) {
 //    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
     let pickedTrade
@@ -142,8 +177,8 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
 }
 
 async function useKlineStrategy(params){
-  let {newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange} = params
-  let pickedTrade = pickTradeUpdateFile(newExtractedInfoList)
+  let {newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList=[]} = params
+  let pickedTrade = pickTradeUpdateFile(newExtractedInfoList, whiteList)
 
   if (pickedTrade) {
     log('pickedTrade'.green, pickedTrade.symbol, pickedTrade.rate)
@@ -233,7 +268,7 @@ async function useKlineStrategy(params){
           throw new Error('Purchase error!')
         }
 
-        let boughtAmount = buyResult.info.executedQty
+        let boughtAmount = Number(buyResult.info.executedQty)
 //        todo get order Id and clientOrderId
 
         try {
@@ -245,7 +280,7 @@ async function useKlineStrategy(params){
             throw new Error('Second purchase error!')
           }
 
-          boughtAmount += buyResult.info.executedQty
+          boughtAmount += Number(buyResult.info.executedQty)
 
           BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           maxAmount = BTCAmount * 0.999 / weightedBuyPrice
@@ -255,7 +290,7 @@ async function useKlineStrategy(params){
             throw new Error('Third purchase error!')
           }
 
-          boughtAmount += buyResult.info.executedQty
+          boughtAmount += Number(buyResult.info.executedQty)
         }
         catch (error) {
           log(`Second or third buy error, relatively ok ${error}`.red)
@@ -287,7 +322,6 @@ async function useKlineStrategy(params){
         klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
       }
 
-      log(`earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline}`.yellow)
       potentialProfit !== 0 && log(`money ${money} -> ${money * (1 + potentialProfit)}`.yellow)
 
       money = money * (1 + potentialProfit)
@@ -304,12 +338,13 @@ async function useKlineStrategy(params){
       //    }
       // buy in this symbol
       if (earnedEnough || dropThroughKline) {
+        log(`Sell ${lastPickedTrade.symbol}`.green)
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
         newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1]
         lastPickedTrade = null
       } else {
         lastPickedTrade = pickedTrade
-        log(`Buy in ${lastPickedTrade.symbol}}`)
+        log(`Buy in ${lastPickedTrade.symbol}`)
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
       }
     }
@@ -387,6 +422,9 @@ async function timeWalk(extractedInfoList){
   let lastPickedTradeList = [] // for volume strategy
   let plot = []//{time, value, event, profit, rate, BTCvolume}
 
+  let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
+  console.log('topVibrated', whiteList)
+
   while (shift + lineLength < extractedInfoList[0].volumeLine.length) {
     let newExtractedInfoList = cutExtractedInfoList (extractedInfoList, shift, lineLength)
     fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
@@ -394,10 +432,8 @@ async function timeWalk(extractedInfoList){
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
 
-    log(Object.keys(newExtractedInfoList[0]).join(' '))
-
     /** useKlineStrategy */
-    let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime})
+    let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})
     lastPickedTrade = klineResult.lastPickedTrade
     money = klineResult.money
     let newPlotDot = klineResult.newPlotDot
@@ -424,6 +460,9 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
 
   for (let info of prevExtractedInfoList){
     let newInfo = _.find(extractedInfoList, {symbol: info.symbol})
+    if (!newInfo || !info) {
+      return true
+    }
     if (info.timeLine.slice(-1)[0] !== newInfo.timeLine.slice(-1)[0]) {
       return false
     }
@@ -462,7 +501,8 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
          * */
         delete require.cache[require.resolve('../savedData/klines/klines')]//Clear require cache
         const extractedInfoList = require('../savedData/klines/klines')
-        const newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
+
+        let newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
 
         /**
          * Skip if extractedInfoList hasn't changed
@@ -475,12 +515,18 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
           prevExtractedInfoList = extractedInfoList
         }
 
+        /**
+         * 只看topVibrated的那几个
+         * */
+        let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
+        console.log('topVibrated', whiteList)
+
         let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
         log(`${currentTime}: ->`.green)
 
         log(`---------- Using Kline Strategy ---------- `.green)
-        let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange})
+        let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList})
 
         lastPickedTrade = klineResult.lastPickedTrade
         let newPlotDot = klineResult.newPlotDot
@@ -513,6 +559,7 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
     try {
       await timeWalk(extractedInfoList)
     } catch (error) {
+      console.error(error)
       log(error.message.red)
     }
   }

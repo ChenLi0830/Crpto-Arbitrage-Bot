@@ -4,6 +4,14 @@ require('ansicolor').nice
 const json2csv = require('json2csv');
 const fs = require('fs')
 
+function resetConsole() {
+  const readline = require('readline')
+  const blank = '\n'.repeat(process.stdout.rows)
+  console.log(blank)
+  readline.cursorTo(process.stdout, 0, 0)
+  readline.clearScreenDown(process.stdout)
+}
+
 async function checkTimeDiff(exchange) {
   let exchangeTime = (await exchange.publicGetTime())['serverTime']
   log(exchangeTime)
@@ -42,4 +50,4 @@ async function simulate (result, delay) {
   return new Promise(resolve => setTimeout(()=>resolve(result), delay))
 }
 
-module.exports = {getMarkets, saveJsonToCSV, simulate}
+module.exports = {getMarkets, saveJsonToCSV, simulate, resetConsole}

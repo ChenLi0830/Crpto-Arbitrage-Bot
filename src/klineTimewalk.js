@@ -12,6 +12,7 @@ require('ansicolor').nice;
 const moment = require('moment')
 const credentials = require('../credentials')
 const {MinorError, MajorError} = require('./utils/errors')
+const utils = require('./utils')
 
 const {
   lineLength,
@@ -141,16 +142,13 @@ function printLine(lineData){
   log.yellow('\n' + chart, '\n')
 }
 
-function pickTradeUpdateFile(newExtractedInfoList, whiteList){
+function pickTradeFromList(newExtractedInfoList, whiteList){
   let sortedPool = rateAndSort(newExtractedInfoList, whiteList)
   if (sortedPool.length > 0) {
 //    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
     let pickedTrade
 //    if (sortedPool[0].rate > 20){
       pickedTrade  = sortedPool[0]
-      //      把pickedTrade写入文件，由购买currency线程读取
-      fs.writeFileSync(PICKED_TRADE, 'module.exports = ' + JSON.stringify(pickedTrade), 'utf-8')
-//    }
     return pickedTrade
   }
 }
@@ -178,7 +176,7 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
 
 async function useKlineStrategy(params){
   let {newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList=[]} = params
-  let pickedTrade = pickTradeUpdateFile(newExtractedInfoList, whiteList)
+  let pickedTrade = pickTradeFromList(newExtractedInfoList, whiteList)
 
   if (pickedTrade) {
     log('pickedTrade'.green, pickedTrade.symbol, pickedTrade.rate)
@@ -485,6 +483,8 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
     let exchangeId = 'binance'
     let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials[exchangeId]))
 
+    utils.resetConsole()
+
     log(`---------- Running in Production ----------`.blue)
     await api.sleep(3000)
 
@@ -536,12 +536,12 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
           if (newPlotDot.value !== money) {
             log(`BTC balance: ${money} -> ${newPlotDot.value}`)
           }
+
+          saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
         }
         console.log('plot', plot)
         money = klineResult.money
         log(`---------- Using Kline Strategy ---------- \n`.green)
-
-        saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
 
       } catch (error) {
         console.error('Major error', error)

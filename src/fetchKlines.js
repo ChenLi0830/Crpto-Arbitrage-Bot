@@ -22,6 +22,7 @@ let {
   KLINE_FILE,
   PICKED_TRADE,
   blackList,
+  whiteList,
 } = require('./config')
 
 //-----------------------------------------------------------------------------
@@ -95,8 +96,13 @@ function printLine(lineData){
         if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
           log(`processing ${symbol}`.green)
 
-          if (blackList.includes(symbol)) {
+          if (blackList.length > 0 && blackList.includes(symbol)) {
             log(`${symbol} is in blacklist, skipping it`.yellow)
+            continue
+          }
+
+          if (whiteList.length > 0 && !whiteList.includes(symbol)) {
+            log(`${symbol} is not in whiteList, skipping it`.yellow)
             continue
           }
 

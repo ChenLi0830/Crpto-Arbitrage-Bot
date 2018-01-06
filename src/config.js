@@ -23,5 +23,5 @@ module.exports = {
 //  PICKED_TRADE : `./savedData/pickedTrade-${process.env.production ? '':'-simulate'}.js`,
   blackList : [],
 //  whiteList: ['ARN/BTC', 'TRX/BTC', 'XRP/BTC', 'ETH/BTC', 'BNB/BTC'],
-  topVibratedNo: 5,
+  topVibratedNo: 10,
 }

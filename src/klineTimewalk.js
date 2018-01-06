@@ -1,5 +1,3 @@
-'use strict'
-
 const ccxt = require('ccxt')
 const asciichart = require('asciichart')
 const asTable = require('as-table')
@@ -13,6 +11,7 @@ const moment = require('moment')
 const credentials = require('../credentials')
 const {MinorError, MajorError} = require('./utils/errors')
 const utils = require('./utils')
+let reload = require('require-reload')(require)
 
 const {
   lineLength,
@@ -239,7 +238,7 @@ async function useKlineStrategy(params){
 
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
         let askPrice = (await exchange.fetchL2OrderBook(symbol)).asks[0]
-        newPlotDot.sellPrice = askPrice
+        newPlotDot.sellPrice = askPrice[0]
         newPlotDot.value = newBTCBalance
 
         lastPickedTrade = null
@@ -499,10 +498,26 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
         /**
          * Read data and get currentTime
          * */
-        delete require.cache[require.resolve('../savedData/klines/klines')]//Clear require cache
+        let cachedModule = require.cache[require.resolve('../savedData/klines/klines')];
+        if (cachedModule) {
+          delete cachedModule.parent.children
+          delete cachedModule
+        }
         const extractedInfoList = require('../savedData/klines/klines')
 
         let newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
+
+        /**
+        * Determine memory leak
+        * */
+        try {
+          global.gc();
+        } catch (e) {
+          console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
+          process.exit();
+        }
+        var heapUsed = process.memoryUsage().heapUsed;
+        console.log("Program is using " + heapUsed + " bytes of Heap.")
 
         /**
          * Skip if extractedInfoList hasn't changed
@@ -536,8 +551,7 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
           if (newPlotDot.value !== money) {
             log(`BTC balance: ${money} -> ${newPlotDot.value}`)
           }
-
-          saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
+          saveJsonToCSV(plot, ['time', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'event', 'price', 'sellPrice', 'value'], PLOT_CSV_FILE)
         }
         console.log('plot', plot)
         money = klineResult.money

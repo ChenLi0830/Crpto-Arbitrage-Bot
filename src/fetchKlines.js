@@ -138,10 +138,10 @@ function printLine(lineData){
           /** get volumeLine */
           volumeLine = ohlcv.slice(-totalKlinelength).map(x => x[volumeIndex])
           /** get priceLine */
-          closeLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
-          openLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
-          highLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
-          lowLine = ohlcv.slice(-totalKlinelength).map(x => x[ohlcvIndex])
+          openLine = ohlcv.slice(-totalKlinelength).map(x => x[1])
+          highLine = ohlcv.slice(-totalKlinelength).map(x => x[2])
+          lowLine = ohlcv.slice(-totalKlinelength).map(x => x[3])
+          closeLine = ohlcv.slice(-totalKlinelength).map(x => x[4])
 
           /** get timeLine */
           timeLine = ohlcv.slice(-totalKlinelength).map(x => x[timeIndex])

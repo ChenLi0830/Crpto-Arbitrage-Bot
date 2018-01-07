@@ -18,10 +18,7 @@ let {
   windows,
   lineLength,
   ohlcvIndex,
-  volumeIndex,
-  timeIndex,
   KLINE_FILE,
-  PICKED_TRADE,
   blackList,
   whiteList,
 } = require('./config')
@@ -103,13 +100,12 @@ function printLine(lineData){
   while (true) { // keep fetching
 //    await api.sleep(intervalInMillesec * 0.6)
     try {
+      let exchange = new ccxt.binance()
+      await exchange.loadMarkets()
+      let extractedInfoList = []
+
       if (process.env.PRODUCTION) {
         await api.sleep(5000)
-
-        let exchange = new ccxt.binance()
-        await exchange.loadMarkets()
-
-        let extractedInfoList = []
 
         let promises = []
         let validSymbols = []
@@ -134,89 +130,18 @@ function printLine(lineData){
         let ohlcvList = await Promise.all(promises)
         console.log('ohlcvList.length', ohlcvList.length)
 
-        for (let ohlcv of ohlcvList) {
+        for (let i=0; i<ohlcvList.length; i++) {
+          let ohlcv = ohlcvList[i]
+          let symbol = validSymbols[i]
+
           if (ohlcv.length < recordNb){
             log(`symbol ${symbol} doesn't have that much history data, skipping it`.yellow)
             continue
           }
 
-
+          let extractedInfo = extractOHLCVInfo(ohlcv, symbol)
+          extractedInfoList.push(extractedInfo)
         }
-
-        //      for (let ohlcv of ohlcvList) {
-        ////        await api.sleep (exchange.rateLimit)
-        //        let klines = {}
-        //        let volumeLine = []
-        //        let closeLine = []
-        //        let openLine = []
-        //        let highLine = []
-        //        let lowLine = []
-        //        let timeLine = []
-        //        let symbolInvalid = false
-        //
-        //        if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
-        //          log(`processing ${symbol}`.green)
-        //
-        //          if (ohlcv.length < recordNb){
-        //            log(`symbol ${symbol} doesn't have that much history data, skipping it`.yellow)
-        //            continue
-        //          }
-        //
-        ////         if numberOfFetch > 0 , 获取更多历史数据
-        //          for (let i=0; i<numberOfFetch - 1; i++){
-        //            let timeStamp = ohlcv[0][0]
-        //            let newSince = timeStamp - 500 * intervalInMillesec
-        //            let newOhlcv = await exchange.fetchOHLCV(symbol, interval, newSince, recordNb)
-        //            if (newOhlcv[0][0] === ohlcv[0][0]) {
-        //              symbolInvalid = true
-        //              log(`symbol ${symbol} doesn't have that much history data, ignoring it`.yellow)
-        //              break
-        //            }
-        //            console.log('newOhlcv.slice(-1)[0][0]', newOhlcv.slice(-1)[0][0], 'ohlcv[0][0]', ohlcv[0][0])
-        //            ohlcv = [...newOhlcv, ...ohlcv]
-        //          }
-        //
-        //          if (symbolInvalid) { // do not save invalid symbol data
-        //            continue
-        //          }
-        //
-        ////          const lineData = ohlcv.slice(-lineLength).map(x => x[ohlcvIndex]) // closing price
-        //////          console.log('lineData', lineData)
-        //////          printLine(lineData)
-        //
-        //          /** get klines */
-        //          for (let window of windows) {
-        //            klines[window] = getAverage(ohlcv, window, ohlcvIndex)
-        //          }
-        //
-        //          let totalKlinelength = klines[windows[0]].length
-        //          /** get volumeLine */
-        //          volumeLine = ohlcv.slice(-totalKlinelength).map(x => x[volumeIndex])
-        //          /** get priceLine */
-        //          openLine = ohlcv.slice(-totalKlinelength).map(x => x[1])
-        //          highLine = ohlcv.slice(-totalKlinelength).map(x => x[2])
-        //          lowLine = ohlcv.slice(-totalKlinelength).map(x => x[3])
-        //          closeLine = ohlcv.slice(-totalKlinelength).map(x => x[4])
-        //
-        //          /** get timeLine */
-        //          timeLine = ohlcv.slice(-totalKlinelength).map(x => x[timeIndex])
-        //
-        //          extractedInfoList.push({
-        //            symbol,
-        //            klines,
-        //            volumeLine,
-        //            closeLine,
-        //            openLine,
-        //            highLine,
-        //            lowLine,
-        //            timeLine,
-        //          })
-        //        }
-        //      }
-        //
-        //      log(`klineDataLength ${extractedInfoList[0].klines[windows[0]].length}`)
-        //      fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
-
       }
       else {
         let exchange = new ccxt.binance()
@@ -266,15 +191,13 @@ function printLine(lineData){
             }
 
             let extractedInfo = extractOHLCVInfo(ohlcv, symbol)
-            console.log('extractedInfo', Object.keys(extractedInfo))
-            console.log('extractedInfo', extractedInfo)
             extractedInfoList.push(extractedInfo)
           }
         }
-
-        log(`klineDataLength ${extractedInfoList[0].klines[windows[0]].length}`)
-        fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
       }
+
+      log(`klineDataLength ${extractedInfoList[0].klines[windows[0]].length}`)
+      fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
     } catch (e) {
       console.error(e)
     }

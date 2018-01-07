@@ -108,12 +108,20 @@ const ccxt = require('ccxt')
 //
 //}
 
+let {retryIfTimeout} = require('./utils/index')
 async function main() {
   let exchange = new ccxt.binance()
-  await exchange.loadMarkets()
-  let result = exchange.currencies
-  console.log(exchange.currencies)
-  console.log(exchange.markets)
+//  let promise = exchange.loadMarkets()
+  let promise = new Promise((resolve, reject) => {
+    throw new ccxt.RequestTimeout('Time out!')
+  })
+  let result = await retryIfTimeout(promise)
+  console.log('result', result)
+//  let exchange = new ccxt.binance()
+//  await exchange.loadMarkets()
+//  let result = exchange.currencies
+//  console.log(exchange.currencies)
+//  console.log(exchange.markets)
 }
 
 //console.log('tickersSortedByPrice', tickersSortedByPrice)

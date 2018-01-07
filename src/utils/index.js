@@ -1,10 +1,11 @@
 const ccxt = require('ccxt')
 const log = require('ololog').configure({locate: false})
 require('ansicolor').nice
-const json2csv = require('json2csv');
+const json2csv = require('json2csv')
 const fs = require('fs')
+const promiseRetry = require('promise-retry')
 
-function resetConsole() {
+function resetConsole () {
   const readline = require('readline')
   const blank = '\n'.repeat(process.stdout.rows)
   console.log(blank)
@@ -12,7 +13,7 @@ function resetConsole() {
   readline.clearScreenDown(process.stdout)
 }
 
-async function checkTimeDiff(exchange) {
+async function checkTimeDiff (exchange) {
   let exchangeTime = (await exchange.publicGetTime())['serverTime']
   log(exchangeTime)
   let yourTime = exchange.milliseconds()
@@ -31,23 +32,46 @@ const getMarkets = async (exchangeId) => {
 
 const saveJsonToCSV = (json, fields = ['field1', 'field2'], fileName) => {
   try {
-    let csv = json2csv({ data: json, fields: fields });
-//    console.log(csv);
+    let csv = json2csv({data: json, fields: fields})
+    //    console.log(csv);
     if (fileName.indexOf('savedData') > -1) {
       fs.writeFileSync(fileName, csv)
-    } else {
+    }
+    else {
       fs.writeFileSync(`./savedData/${fileName}.csv`, csv)
     }
 
-  } catch (err) {
+  }
+  catch (err) {
     // Errors are thrown for bad options, or if the data is empty and no fields are provided.
     // Be sure to provide fields if it is possible that your data array will be empty.
-    console.error(err);
+    console.error(err)
   }
 }
 
 async function simulate (result, delay) {
-  return new Promise(resolve => setTimeout(()=>resolve(result), delay))
+  return new Promise(resolve => setTimeout(() => resolve(result), delay))
 }
 
-module.exports = {getMarkets, saveJsonToCSV, simulate, resetConsole}
+async function retryIfTimeout (promise) {
+  return await promiseRetry(async (retry, number) => {
+    try {
+      return await promise
+    }
+    catch (err) {
+      if (err instanceof ccxt.RequestTimeout) {
+        log.bright.yellow(`[Request Timeout], retry task ${number}`)
+        retry(err)
+      }
+      throw err
+    }
+  })
+}
+
+module.exports = {
+  getMarkets,
+  saveJsonToCSV,
+  simulate,
+  resetConsole,
+  retryIfTimeout
+}

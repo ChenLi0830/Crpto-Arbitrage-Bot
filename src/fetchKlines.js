@@ -199,6 +199,7 @@ function printLine(lineData){
       log(`klineDataLength ${extractedInfoList[0].klines[windows[0]].length}`)
       fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
     } catch (e) {
+      console.log(new Date())
       console.error(e)
     }
 

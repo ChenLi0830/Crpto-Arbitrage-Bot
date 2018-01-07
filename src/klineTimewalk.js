@@ -52,7 +52,7 @@ function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
     extractedInfo.vibrateValue = vibrateValue
   }
   let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.vibrateValue)
-//  log(sortedExtractedInfoList.map(o => `${o.symbol}`).join(' '))
+  log(sortedExtractedInfoList.map(o => `${o.symbol}: ${o.vibrateValue}`).slice(0, topVibratedNo).join(' '))
 
   return sortedExtractedInfoList.map(o => `${o.symbol}`).slice(0, topVibratedNo)
 //  return sortedExtractedInfoList.slice(topVibratedNo)
@@ -142,7 +142,6 @@ function rateAndSort(extractedInfoList, whiteList) {
   }
 
   let sortedPool = _.sortBy(buyingPool, item => -item.rate)
-
   return sortedPool
 }
 
@@ -498,6 +497,10 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
     log(`---------- Running in Production ----------`.blue)
     await api.sleep(3000)
 
+    log(`---        lineLength ${lineLength}`)
+    log(`---        windows ${windows}`)
+    log(`---        topVibratedNo ${topVibratedNo}`)
+
     log(`---------- Fetching Balance ----------`.green)
     let money = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
     log(`---        BTC Balance - ${money}`.green)
@@ -510,12 +513,20 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
          * Read data and get currentTime
          * */
 
-        let cachedModule = require.cache[require.resolve('../savedData/klines/klines')]
-        if (cachedModule) {
-          delete require.cache[require.resolve('../savedData/klines/klines')].parent.children//Clear require cache
-          delete require.cache[require.resolve('../savedData/klines/klines')]
+        let extractedInfoList = null
+        /**
+         * 用 while 读取，防止出现文件更新时读取的情况
+         * */
+        while (!extractedInfoList || !extractedInfoList[0]) {
+          let cachedModule = require.cache[require.resolve('../savedData/klines/klines')]
+          if (cachedModule) {
+            delete require.cache[require.resolve('../savedData/klines/klines')].parent.children//Clear require cache
+            delete require.cache[require.resolve('../savedData/klines/klines')]
+          }
+
+          await api.sleep(100)
+          extractedInfoList = require('../savedData/klines/klines')
         }
-        const extractedInfoList = require('../savedData/klines/klines')
 
         let newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
 

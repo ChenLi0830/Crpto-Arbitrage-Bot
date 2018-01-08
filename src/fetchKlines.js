@@ -147,7 +147,7 @@ function printLine(lineData){
         let exchange = new ccxt.binance()
         await exchange.loadMarkets()
 
-        let extractedInfoList = []
+        extractedInfoList = []
         for (let symbol of exchange.symbols) {
           //        await api.sleep (exchange.rateLimit)
           let symbolInvalid = false

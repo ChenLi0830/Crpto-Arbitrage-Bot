@@ -13,6 +13,10 @@ const moment = require('moment')
 const TOP_VIBRATED_CSV_FILE = './savedData/topVibrated.csv'
 const TOP_VOLUME_CSV_FILE = './savedData/topVolume.csv'
 //-----------------------------------------------------------------------------
+
+/**
+ * 从klines文件中获得振动最大和BTC Volume最大的币，并保存
+ * */
 async function main () {
   let extractedInfoList = require('../savedData/klines/klines')
   let statsInterval = 4 * 60 * 60 * 1000 //'4h'
@@ -46,28 +50,15 @@ async function main () {
     topVolumeResult.push({
       startTime,
       endTime,
-      topVolume: topVolume.map(info => `{${info.symbol}: ${info.totalVolume}}`).join(' ')
+      topVolume: topVolume.map(info => `{${info.symbol}: ${info.BTCVolume}}`).join(' ')
     })
 
     startIndex = endIndex + 1
 
   }
 
-//  console.log('topVibrateResult', topVibrateResult)
   saveJsonToCSV(topVibrateResult, ['startTime', 'endTime', 'topVibrated'], TOP_VIBRATED_CSV_FILE)
   saveJsonToCSV(topVolumeResult, ['startTime', 'endTime', 'topVolume'], TOP_VOLUME_CSV_FILE)
-
-  //  while (data.length < fetchingGoal) {
-  //    fetchSince -= fetchRecordNb * milsecPerRecord
-  //    let fetchedData = await fetchData(exchangeId, symbol, interval, fetchSince,
-  //      fetchRecordNb)
-  //    data.push(...fetchedData)
-//      saveJsonToCSV(data, ['time', 'open', 'high', 'low', 'close', 'volume'], fileName)
-  //    log(`${data.length} of record is fetched, ${Math.trunc(100 * data.length / fetchingGoal)}%`.green)
-  //  }
-  //
-  //  console.log('data', data)
-  //  process.exit()
 }
 
 (async ()=>{

@@ -387,7 +387,9 @@ async function timeWalk(extractedInfoList){
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
 
-    let whiteList = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
+    let topVibrated = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
+    log(topVibrated.map(o => `${o.symbol}: ${o.vibrateValue}`).join(' '))
+    let whiteList = (topVibrated).map(o => `${o.symbol}`)
     console.log('topVibrated', whiteList)
 
     /** useKlineStrategy */
@@ -493,7 +495,10 @@ async function timeWalk(extractedInfoList){
          * 只看topVibrated的那几个
          * */
           //        let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
-        let whiteList = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
+        let topVibrated = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
+        log(topVibrated.map(o => `${o.symbol}: ${o.vibrateValue}`).join(' '))
+        let whiteList = (topVibrated).map(o => `${o.symbol}`)
+
         console.log('topVibrated', whiteList)
 
         let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]

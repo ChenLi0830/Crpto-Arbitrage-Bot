@@ -11,6 +11,7 @@ const moment = require('moment')
 const credentials = require('../credentials')
 const {MinorError, MajorError} = require('./utils/errors')
 const utils = require('./utils')
+const {retryExTaskIfTimeout} = utils
 
 const {
   lineLength,
@@ -31,13 +32,13 @@ function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
   for ( let extractedInfo of extractedInfoList ) {
     if (!extractedInfo) {
       console.log('undefined', extractedInfo)
-//      console.log('extractedInfoList', extractedInfoList)
+      //      console.log('extractedInfoList', extractedInfoList)
     }
     let meanClose = _.mean(extractedInfo.closeLine)
-//    let meanSquareError = 0
-//    for (let price of extractedInfo.closeLine) {
-//      meanSquareError = meanSquareError + Math.pow((price - meanClose)/meanClose, 2)
-//    }
+    //    let meanSquareError = 0
+    //    for (let price of extractedInfo.closeLine) {
+    //      meanSquareError = meanSquareError + Math.pow((price - meanClose)/meanClose, 2)
+    //    }
     let infoLength = extractedInfo.closeLine.length
     let vibrateValue = 0
     for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
@@ -55,7 +56,7 @@ function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
   log(sortedExtractedInfoList.map(o => `${o.symbol}: ${o.vibrateValue}`).slice(0, topVibratedNo).join(' '))
 
   return sortedExtractedInfoList.map(o => `${o.symbol}`).slice(0, topVibratedNo)
-//  return sortedExtractedInfoList.slice(topVibratedNo)
+  //  return sortedExtractedInfoList.slice(topVibratedNo)
 }
 
 function checkValueCriteria(klines, index, closeLine) {
@@ -63,16 +64,16 @@ function checkValueCriteria(klines, index, closeLine) {
   let isMiddleKlineLarger = klines[windows[1]][index] > klines[windows[2]][index]
   let priceGreaterThanFastKline = closeLine[index] > klines[windows[0]][index]
 
-//  let accumatedIncrease = 0
-//  let accumulatedInterval = 0
-//  for (let i=index-1; i>0; i--) {
-//    if (klines[windows[0]][i-1] > klines[windows[0]][i]) {
-//      accumatedIncrease = (klines[windows[0]][index] - klines[windows[0]][i-1]) / klines[windows[0]][i-1]
-//      accumulatedInterval = index - i
-//      break
-//    }
-//  }
-//  let previousIncreaseNotTooBig = accumatedIncrease < 0.2 || accumulatedInterval < 5
+  //  let accumatedIncrease = 0
+  //  let accumulatedInterval = 0
+  //  for (let i=index-1; i>0; i--) {
+  //    if (klines[windows[0]][i-1] > klines[windows[0]][i]) {
+  //      accumatedIncrease = (klines[windows[0]][index] - klines[windows[0]][i-1]) / klines[windows[0]][i-1]
+  //      accumulatedInterval = index - i
+  //      break
+  //    }
+  //  }
+  //  let previousIncreaseNotTooBig = accumatedIncrease < 0.2 || accumulatedInterval < 5
 
   return isFastKlineLarger && isMiddleKlineLarger && priceGreaterThanFastKline /*&& previousIncreaseNotTooBig*/
 }
@@ -87,16 +88,16 @@ function checkVolCriteria(volumeLine){
 function checkBuyingCriteria(klines, volumeLine, closeLine, openLine) {
   let matchVolCriteria = checkVolCriteria(volumeLine)
   let isPricesHigherThanPrevPoint = (closeLine[lineLength - 1] > closeLine[lineLength - 2]) && (openLine[lineLength - 1] > openLine[lineLength - 2])
-//  if (isPricesHigherThanPrevPoint) {
-//    log(closeLine[lineLength - 1], closeLine[lineLength - 2], openLine[lineLength - 1], openLine[lineLength - 2])
-//  }
-//  let isFastKlineIncreaseFast = (klines[windows[0]][lineLength-1] / klines[windows[0]][lineLength-2]) > 1.1
+  //  if (isPricesHigherThanPrevPoint) {
+  //    log(closeLine[lineLength - 1], closeLine[lineLength - 2], openLine[lineLength - 1], openLine[lineLength - 2])
+  //  }
+  //  let isFastKlineIncreaseFast = (klines[windows[0]][lineLength-1] / klines[windows[0]][lineLength-2]) > 1.1
 
   let currentPoint = lineLength-1
   let prevPoint = lineLength-2
 
   let nowValueMatchCriteria = checkValueCriteria(klines, currentPoint, closeLine)
-//  let prevValueMatchCriteria = checkValueCriteria(klines, prevPoint)
+  //  let prevValueMatchCriteria = checkValueCriteria(klines, prevPoint)
 
   //  log(`nowMatchCriteria`, nowMatchCriteria)
   //  log(`prevMatchCriteria`, prevMatchCriteria)
@@ -111,12 +112,12 @@ function rateCurrency(klines, volumeLine) {
 
   let volInBTC = klines[windows[0]][lineLength - 1] * volumeLine[lineLength - 1]
 
-//  let rate = Math.min(deriveK * deriveK * deriveK, 20) * Math.min(deriveVolume, 3) * volInBTC //* Math.sqrt(volInBTC)
+  //  let rate = Math.min(deriveK * deriveK * deriveK, 20) * Math.min(deriveVolume, 3) * volInBTC //* Math.sqrt(volInBTC)
   let rate = deriveK
 
-//  if (volumeLine[lineLength - 2] === 0) { // 之前没有交易的货币不考虑
-//    rate = - Infinity
-//  }
+  //  if (volumeLine[lineLength - 2] === 0) { // 之前没有交易的货币不考虑
+  //    rate = - Infinity
+  //  }
   return rate
 }
 
@@ -125,8 +126,8 @@ function rateAndSort(extractedInfoList, whiteList) {
 
   for (let extractedInfo of extractedInfoList) {
     /**
-    * 白名单过滤 - 选择振动最强的
-    * */
+     * 白名单过滤 - 选择振动最强的
+     * */
     if (whiteList && whiteList.length > 0 && !whiteList.includes(extractedInfo.symbol)) {
       continue
     }
@@ -153,11 +154,11 @@ function printLine(lineData){
 function pickTradeFromList(newExtractedInfoList, whiteList){
   let sortedPool = rateAndSort(newExtractedInfoList, whiteList)
   if (sortedPool.length > 0) {
-//    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
+    //    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
     log('Picking from list: '.green, sortedPool.map(o => o.symbol).join(' '))
     let pickedTrade
-//    if (sortedPool[0].rate > 20){
-      pickedTrade  = sortedPool[0]
+    //    if (sortedPool[0].rate > 20){
+    pickedTrade  = sortedPool[0]
     return pickedTrade
   }
 }
@@ -170,9 +171,9 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
   if (lastPickedTrade) {
     let purchasePrice = lastPickedTrade.closeLine.slice(-1)[0]
     let sellPrice = lastTradeCurrentState.closeLine.slice(-1)[0]
-//    if (purchasePrice > sellPrice) {
-//      log(`${lastPickedTrade.symbol}: purchase ${purchasePrice} -> sell ${sellPrice}`.yellow)
-//    }
+    //    if (purchasePrice > sellPrice) {
+    //      log(`${lastPickedTrade.symbol}: purchase ${purchasePrice} -> sell ${sellPrice}`.yellow)
+    //    }
 
     //          lastTradeCurrentState.closeLine.slice(-1)[0]
 
@@ -198,19 +199,19 @@ async function useKlineStrategy(params){
 
   /** get conditions */
   let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState) : 0
-//  let lostTooMuch = potentialProfit < -0.03
+  //  let lostTooMuch = potentialProfit < -0.03
   let dropThroughKline = lastPickedTrade ? lastTradeCurrentState.closeLine[lineLength-1] < lastTradeCurrentState.klines[windows[0]][lineLength-1] : false
-//  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[lineLength-1] - lastTradeCurrentState.closeLine[lineLength-2])/lastTradeCurrentState.closeLine[lineLength-1] : 0
-//  let bigChangeInPrice = recentPriceDiff < -0.03
+  //  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[lineLength-1] - lastTradeCurrentState.closeLine[lineLength-2])/lastTradeCurrentState.closeLine[lineLength-1] : 0
+  //  let bigChangeInPrice = recentPriceDiff < -0.03
   let earnedEnough = potentialProfit >= 0.50
-//  let noLongerGoodTrade = lastPickedTrade
-//    ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1, lastTradeCurrentState.closeLine )
-//    : false
+  //  let noLongerGoodTrade = lastPickedTrade
+  //    ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1, lastTradeCurrentState.closeLine )
+  //    : false
 
-////  /** determine if change */
-//  let newTradeIsBetter = pickedTrade
-//    ? noCurrentTradeOrNewTradeBetter(pickedTrade, lastPickedTrade)
-//    : false
+  ////  /** determine if change */
+  //  let newTradeIsBetter = pickedTrade
+  //    ? noCurrentTradeOrNewTradeBetter(pickedTrade, lastPickedTrade)
+  //    : false
 
   let newPlotDot = null
 
@@ -236,18 +237,24 @@ async function useKlineStrategy(params){
 
         let symbol = lastPickedTrade.symbol
         let targetCurrency = symbol.split('/')[0]
-        let targetBalance = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free'][targetCurrency]
+
+        let targetBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free'][targetCurrency]
         log(`--- ${targetCurrency} balance ${targetBalance}`.green)
 
         log(`--- Start Selling`.blue)
-        let sellResult = await exchange.createMarketSellOrder(symbol, targetBalance)
+
+        let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, targetBalance])
+        //        let sellResult = await exchange.createMarketSellOrder(symbol, targetBalance)
         log(`--- Selling Result`.blue, sellResult)
 
-        let newBTCBalance = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+        let newBTCBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+        //        let newBTCBalance = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
         log(`--- newBTCBalance ${newBTCBalance}`)
 
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
-        let askPrice = (await exchange.fetchL2OrderBook(symbol)).asks[0]
+
+        let askPrice = (await retryExTaskIfTimeout(exchange, 'fetchL2OrderBook', [symbol])).asks[0]
+        //        let askPrice = (await exchange.fetchL2OrderBook(symbol)).asks[0]
         newPlotDot.sellPrice = askPrice[0]
         newPlotDot.value = newBTCBalance
 
@@ -258,30 +265,37 @@ async function useKlineStrategy(params){
         * 买币
         * */
         let symbol = pickedTrade.symbol
-        let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
-        let orderBook = await exchange.fetchL2OrderBook(symbol)
+
+        let BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+        //        let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+        let orderBook = await retryExTaskIfTimeout(exchange, 'fetchL2OrderBook', [symbol])
+        //        let orderBook = await exchange.fetchL2OrderBook(symbol)
 
         let weightedBuyPrice = api.weightedPrice(orderBook.asks, BTCAmount).tradePrice
 
         log(`--- Buy in ${pickedTrade.symbol} at ${weightedBuyPrice} with BTCAmount ${BTCAmount}`.blue)
 
         /**
-         * 买两次，避免买不到
+         * 买三次，避免买不到
          * */
         let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
-        let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
+
+        let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7])
+        //        let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
         console.log('buyResult', buyResult)
         if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
           throw new Error('Purchase error!')
         }
 
         let boughtAmount = Number(buyResult.info.executedQty)
-//        todo get order Id and clientOrderId
+        //        todo get order Id and clientOrderId
 
         try {
-          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+          let BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+          //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
-          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
+          let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7])
+          //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Second buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
             throw new Error('Second purchase error!')
@@ -289,9 +303,11 @@ async function useKlineStrategy(params){
 
           boughtAmount += Number(buyResult.info.executedQty)
 
-          BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+          BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+          //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           maxAmount = BTCAmount * 0.999 / weightedBuyPrice
-          buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
+          buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7])
+          //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Third buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
             throw new Error('Third purchase error!')
@@ -305,7 +321,7 @@ async function useKlineStrategy(params){
 
         lastPickedTrade = pickedTrade
 
-        let newBTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+        let newBTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
         let spentBTC = BTCAmount - newBTCAmount
         log(`---    spent ${Math.trunc(100 * spentBTC/BTCAmount)}% in purchase, average purchase price ${spentBTC / boughtAmount}`)
 
@@ -363,7 +379,7 @@ async function useKlineStrategy(params){
 function useVolumeStrategy(params) {
   let {newExtractedInfoList, lastPickedTradeList, money, currentTime} = params
   let sortedByVol = _.sortBy(newExtractedInfoList, o => - (o.volumeLine[lineLength-1] * o.closeLine[lineLength-1]))
-//  console.log('sortedByVol', sortedByVol.map(info => info.volumeLine[lineLength-1] * info.closeLine[lineLength-1]).join(' '))
+  //  console.log('sortedByVol', sortedByVol.map(info => info.volumeLine[lineLength-1] * info.closeLine[lineLength-1]).join(' '))
 
   let firstFive = sortedByVol.slice(0, 5)
   log('firstFive.length', firstFive.length, firstFive.map(info => info.symbol).join(' '))
@@ -445,18 +461,18 @@ async function timeWalk(extractedInfoList){
     money = klineResult.money
     let newPlotDot = klineResult.newPlotDot
 
-//    /** volumeStrategy */
-//    let volumeResult = useVolumeStrategy({newExtractedInfoList, lastPickedTradeList, money, currentTime})
-//    lastPickedTradeList = volumeResult.lastPickedTradeList
-//    money = volumeResult.money
-//    let newPlotDot = volumeResult.newPlotDot
+    //    /** volumeStrategy */
+    //    let volumeResult = useVolumeStrategy({newExtractedInfoList, lastPickedTradeList, money, currentTime})
+    //    lastPickedTradeList = volumeResult.lastPickedTradeList
+    //    money = volumeResult.money
+    //    let newPlotDot = volumeResult.newPlotDot
     if (!!newPlotDot) {
       plot.push(newPlotDot)
     }
-//    log(`shift ${shift}`)
+    //    log(`shift ${shift}`)
     shift++
   }
-//  profit, rate
+  //  profit, rate
   saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
 }
 
@@ -502,7 +518,8 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
     log(`---        topVibratedNo ${topVibratedNo}`)
 
     log(`---------- Fetching Balance ----------`.green)
-    let money = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+    //    let money = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+    let money = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
     log(`---        BTC Balance - ${money}`.green)
     log(`---------- Fetching Balance ---------- \n`.green)
 
@@ -513,17 +530,17 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
          * Read data and get currentTime
          * */
 
+        let cachedModule = require.cache[require.resolve('../savedData/klines/klines')]
+        if (cachedModule) {
+          delete require.cache[require.resolve('../savedData/klines/klines')].parent.children//Clear require cache
+          delete require.cache[require.resolve('../savedData/klines/klines')]
+        }
+
         let extractedInfoList = null
         /**
          * 用 while 读取，防止出现文件更新时读取的情况
          * */
         while (!extractedInfoList || !extractedInfoList[0]) {
-          let cachedModule = require.cache[require.resolve('../savedData/klines/klines')]
-          if (cachedModule) {
-            delete require.cache[require.resolve('../savedData/klines/klines')].parent.children//Clear require cache
-            delete require.cache[require.resolve('../savedData/klines/klines')]
-          }
-
           await api.sleep(100)
           extractedInfoList = require('../savedData/klines/klines')
         }
@@ -531,8 +548,8 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
         let newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
 
         /**
-        * Determine memory leak
-        * */
+         * Determine memory leak
+         * */
         try {
           global.gc();
         } catch (e) {
@@ -546,7 +563,7 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
          * Skip if extractedInfoList hasn't changed
          * */
         if (JSON.stringify(prevExtractedInfoList) === JSON.stringify(extractedInfoList)) {
-//        if (checkInfoChanged(prevExtractedInfoList, extractedInfoList)) {
+          //        if (checkInfoChanged(prevExtractedInfoList, extractedInfoList)) {
           log('No new data, Skip'.green)
           continue
         }
@@ -557,7 +574,7 @@ function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
         /**
          * 只看topVibrated的那几个
          * */
-//        let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
+          //        let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
         let whiteList = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
         console.log('topVibrated', whiteList)
 

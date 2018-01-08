@@ -11,18 +11,28 @@ const moment = require('moment')
 const credentials = require('../credentials')
 const {MinorError, MajorError} = require('./utils/errors')
 const utils = require('./utils')
-const {retryExTaskIfTimeout, cutExtractedInfoList, getTopVibrated} = utils
+const {
+  retryExTaskIfTimeout,
+  cutExtractedInfoList,
+  getTopVibrated,
+  getTopVolume,
+  addVibrateValue,
+  addBTCVolValue,
+} = utils
 
 const {
   lineLength,
   windows,
-  topVibratedNo
+  topVibratedNo,
+  KLINE_FILE,
+  PLOT_CSV_FILE,
 } = require('./config')
 
-const KLINE_FILE = './savedData/klines/klines.js' // todo production时使用不同的文件名 `...${production}.js`
-const PICKED_TRADE = './savedData/pickedTrade.js'
-const PLOT_CSV_FILE = './savedData/klines/plotCsv.csv'
+console.log('KLINE_FILE', KLINE_FILE)
+console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
 
+let vibrateWhiteList = []
+let volumeWhiteList = []
 //-----------------------------------------------------------------------------
 
 function checkValueCriteria(klines, index, closeLine) {
@@ -387,10 +397,24 @@ async function timeWalk(extractedInfoList){
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
 
+    /**
+     * 给 newExtractedInfoList 添加 vibrateValue 和 BTCVolume
+     * */
+    extractedInfoList = addVibrateValue(extractedInfoList, observeLength)
+    extractedInfoList = addBTCVolValue(extractedInfoList, observeLength)
+
+    /**
+     * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,
+     * */
     let topVibrated = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
+    vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
     log(topVibrated.map(o => `${o.symbol}: ${o.vibrateValue}`).join(' '))
-    let whiteList = (topVibrated).map(o => `${o.symbol}`)
-    console.log('topVibrated', whiteList)
+
+    let topVolume = getTopVolume(newExtractedInfoList, 10, newInfoLength)
+    volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
+    log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
+
+
 
     /** useKlineStrategy */
     let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})

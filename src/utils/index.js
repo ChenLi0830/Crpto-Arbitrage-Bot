@@ -106,10 +106,7 @@ function cutExtractedInfoList (extractedInfoList, start, lineLength) {
   return newExtractedInfoList
 }
 
-/**
- * Get top vibrated
- * */
-function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
+function addVibrateValue(extractedInfoList, observeLength) {
   for ( let extractedInfo of extractedInfoList ) {
     if (!extractedInfo) {
       console.log('undefined', extractedInfo)
@@ -133,16 +130,21 @@ function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
     }
     extractedInfo.vibrateValue = vibrateValue
   }
-  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.vibrateValue)
-
-  return sortedExtractedInfoList.slice(0, topVibratedNo)
-  //  return sortedExtractedInfoList.slice(topVibratedNo)
+  return extractedInfoList
 }
 
+
 /**
- * Get Top Volume
+ * Get top vibrated
  * */
-function getTopVolume(extractedInfoList, topVolumeNo, observeLength = 50){
+function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
+  addVibrateValue(extractedInfoList, observeLength)
+
+  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.vibrateValue)
+  return sortedExtractedInfoList.slice(0, topVibratedNo)
+}
+
+function addBTCVolValue(extractedInfoList, observeLength) {
   for ( let extractedInfo of extractedInfoList ) {
     let infoLength = extractedInfo.closeLine.length
     let totalVolume = 0
@@ -153,12 +155,18 @@ function getTopVolume(extractedInfoList, topVolumeNo, observeLength = 50){
       let BTCVolume = extractedInfo.closeLine[i] * extractedInfo.volumeLine[i]
       totalVolume += BTCVolume
     }
-    extractedInfo.totalVolume = totalVolume
+    extractedInfo.BTCVolume = totalVolume
   }
-  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.totalVolume)
+  return extractedInfoList
+}
 
+/**
+ * Get Top Volume
+ * */
+function getTopVolume(extractedInfoList, topVolumeNo, observeLength = 50){
+  addBTCVolValue(extractedInfoList, observeLength)
+  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.BTCVolume)
   return sortedExtractedInfoList.slice(0, topVolumeNo)
-  //  return sortedExtractedInfoList.slice(topVibratedNo)
 }
 
 module.exports = {
@@ -170,4 +178,6 @@ module.exports = {
   cutExtractedInfoList,
   getTopVibrated,
   getTopVolume,
+  addVibrateValue,
+  addBTCVolValue,
 }

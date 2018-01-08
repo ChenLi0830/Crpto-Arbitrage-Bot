@@ -11,7 +11,7 @@ const moment = require('moment')
 const credentials = require('../credentials')
 const {MinorError, MajorError} = require('./utils/errors')
 const utils = require('./utils')
-const {retryExTaskIfTimeout} = utils
+const {retryExTaskIfTimeout, cutExtractedInfoList, getTopVibrated} = utils
 
 const {
   lineLength,
@@ -24,40 +24,6 @@ const PICKED_TRADE = './savedData/pickedTrade.js'
 const PLOT_CSV_FILE = './savedData/klines/plotCsv.csv'
 
 //-----------------------------------------------------------------------------
-
-/**
- * Get top vibrated
- * */
-function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
-  for ( let extractedInfo of extractedInfoList ) {
-    if (!extractedInfo) {
-      console.log('undefined', extractedInfo)
-      //      console.log('extractedInfoList', extractedInfoList)
-    }
-    let meanClose = _.mean(extractedInfo.closeLine)
-    //    let meanSquareError = 0
-    //    for (let price of extractedInfo.closeLine) {
-    //      meanSquareError = meanSquareError + Math.pow((price - meanClose)/meanClose, 2)
-    //    }
-    let infoLength = extractedInfo.closeLine.length
-    let vibrateValue = 0
-    for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
-      /**
-       * 只看增长部分
-       * */
-      let increaseValue = (extractedInfo.closeLine[i] - extractedInfo.closeLine[i-1]) / extractedInfo.closeLine[i-1]
-      if (increaseValue > 0) {
-        vibrateValue += increaseValue
-      }
-    }
-    extractedInfo.vibrateValue = vibrateValue
-  }
-  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.vibrateValue)
-  log(sortedExtractedInfoList.map(o => `${o.symbol}: ${o.vibrateValue}`).slice(0, topVibratedNo).join(' '))
-
-  return sortedExtractedInfoList.map(o => `${o.symbol}`).slice(0, topVibratedNo)
-  //  return sortedExtractedInfoList.slice(topVibratedNo)
-}
 
 function checkValueCriteria(klines, index, closeLine) {
   let isFastKlineLarger = (klines[windows[0]][index] > klines[windows[1]][index]) && (klines[windows[0]][index] > klines[windows[2]][index])
@@ -407,37 +373,6 @@ function useVolumeStrategy(params) {
   return {lastPickedTradeList, money, newPlotDot}
 }
 
-function cutExtractedInfoList (extractedInfoList, shift, lineLength) {
-  let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
-    /** newKlines - length==lineLength */
-    let newKlines = {}
-    Object.keys(extractedInfo.klines).forEach(key => {
-      newKlines[key] = extractedInfo.klines[key].slice(shift, shift + lineLength)
-    })
-    /** newVolumes */
-    let newVolumes = extractedInfo.volumeLine.slice(shift, shift + lineLength)
-    /** newPrices */
-    let newCloseLine = extractedInfo.closeLine.slice(shift, shift + lineLength)
-    let newOpenLine = extractedInfo.openLine.slice(shift, shift + lineLength)
-    let newHighLine = extractedInfo.highLine.slice(shift, shift + lineLength)
-    let newLowLine = extractedInfo.lowLine.slice(shift, shift + lineLength)
-    /** newTimes */
-    let newTimes = extractedInfo.timeLine.slice(shift, shift + lineLength)
-
-    return {
-      ...extractedInfo,
-      klines: newKlines,
-      volumeLine: newVolumes,
-      closeLine: newCloseLine,
-      openLine: newOpenLine,
-      highLine: newHighLine,
-      lowLine: newLowLine,
-      timeLine: newTimes,
-    }
-  })
-  return newExtractedInfoList
-}
-
 async function timeWalk(extractedInfoList){
   let shift = 0
   let money = 100
@@ -476,23 +411,6 @@ async function timeWalk(extractedInfoList){
   saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
 }
 
-function checkInfoChanged(prevExtractedInfoList, extractedInfoList) {
-  if (!prevExtractedInfoList) {
-    return false
-  }
-
-  for (let info of prevExtractedInfoList){
-    let newInfo = _.find(extractedInfoList, {symbol: info.symbol})
-    if (!newInfo || !info) {
-      return true
-    }
-    if (info.timeLine.slice(-1)[0] !== newInfo.timeLine.slice(-1)[0]) {
-      return false
-    }
-  }
-
-  return true
-}
 
 (async function main () {
   let PRODUCTION = process.env.PRODUCTION

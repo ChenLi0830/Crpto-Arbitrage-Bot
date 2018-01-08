@@ -4,6 +4,7 @@ require('ansicolor').nice
 const json2csv = require('json2csv')
 const fs = require('fs')
 const promiseRetry = require('promise-retry')
+const _ = require('lodash')
 
 function resetConsole () {
   const readline = require('readline')
@@ -53,14 +54,17 @@ async function simulate (result, delay) {
   return new Promise(resolve => setTimeout(() => resolve(result), delay))
 }
 
-async function retryIfTimeout (promise) {
+/**
+ * 用来调用exchange的方法, 当timeout时，自动retry
+ * */
+async function retryExTaskIfTimeout (exchange, func, args=[]) {
   return await promiseRetry(async (retry, number) => {
     try {
-      return await promise
+      return await exchange[func](...args)
     }
     catch (err) {
       if (err instanceof ccxt.RequestTimeout) {
-        log.bright.yellow(`[Request Timeout], retry task ${number}`)
+        log.bright.yellow(`[Request Timeout], retry task - ${number} time`)
         retry(err)
       }
       throw err
@@ -68,10 +72,102 @@ async function retryIfTimeout (promise) {
   })
 }
 
+/**
+ * 从ExtractedInfoList里截取出对应长度的
+ * */
+function cutExtractedInfoList (extractedInfoList, start, lineLength) {
+  let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
+    /** newKlines - length==lineLength */
+    let newKlines = {}
+    Object.keys(extractedInfo.klines).forEach(key => {
+      newKlines[key] = extractedInfo.klines[key].slice(start, start + lineLength)
+    })
+    /** newVolumes */
+    let newVolumes = extractedInfo.volumeLine.slice(start, start + lineLength)
+    /** newPrices */
+    let newCloseLine = extractedInfo.closeLine.slice(start, start + lineLength)
+    let newOpenLine = extractedInfo.openLine.slice(start, start + lineLength)
+    let newHighLine = extractedInfo.highLine.slice(start, start + lineLength)
+    let newLowLine = extractedInfo.lowLine.slice(start, start + lineLength)
+    /** newTimes */
+    let newTimes = extractedInfo.timeLine.slice(start, start + lineLength)
+
+    return {
+      ...extractedInfo,
+      klines: newKlines,
+      volumeLine: newVolumes,
+      closeLine: newCloseLine,
+      openLine: newOpenLine,
+      highLine: newHighLine,
+      lowLine: newLowLine,
+      timeLine: newTimes,
+    }
+  })
+  return newExtractedInfoList
+}
+
+/**
+ * Get top vibrated
+ * */
+function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
+  for ( let extractedInfo of extractedInfoList ) {
+    if (!extractedInfo) {
+      console.log('undefined', extractedInfo)
+      //      console.log('extractedInfoList', extractedInfoList)
+    }
+    let meanClose = _.mean(extractedInfo.closeLine)
+    //    let meanSquareError = 0
+    //    for (let price of extractedInfo.closeLine) {
+    //      meanSquareError = meanSquareError + Math.pow((price - meanClose)/meanClose, 2)
+    //    }
+    let infoLength = extractedInfo.closeLine.length
+    let vibrateValue = 0
+    for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
+      /**
+       * 只看增长部分
+       * */
+      let increaseValue = (extractedInfo.closeLine[i] - extractedInfo.closeLine[i-1]) / extractedInfo.closeLine[i-1]
+      if (increaseValue > 0) {
+        vibrateValue += increaseValue
+      }
+    }
+    extractedInfo.vibrateValue = vibrateValue
+  }
+  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.vibrateValue)
+
+  return sortedExtractedInfoList.slice(0, topVibratedNo)
+  //  return sortedExtractedInfoList.slice(topVibratedNo)
+}
+
+/**
+ * Get Top Volume
+ * */
+function getTopVolume(extractedInfoList, topVolumeNo, observeLength = 50){
+  for ( let extractedInfo of extractedInfoList ) {
+    let infoLength = extractedInfo.closeLine.length
+    let totalVolume = 0
+    for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
+      /**
+       * 对应的BTCVolume = volume * price
+       * */
+      let BTCVolume = extractedInfo.closeLine[i] * extractedInfo.volumeLine[i]
+      totalVolume += BTCVolume
+    }
+    extractedInfo.totalVolume = totalVolume
+  }
+  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.totalVolume)
+
+  return sortedExtractedInfoList.slice(0, topVolumeNo)
+  //  return sortedExtractedInfoList.slice(topVibratedNo)
+}
+
 module.exports = {
   getMarkets,
   saveJsonToCSV,
   simulate,
   resetConsole,
-  retryIfTimeout
+  retryExTaskIfTimeout,
+  cutExtractedInfoList,
+  getTopVibrated,
+  getTopVolume,
 }

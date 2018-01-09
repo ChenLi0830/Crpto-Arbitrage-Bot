@@ -20,19 +20,43 @@ const {
   addBTCVolValue,
 } = utils
 
-const {
+let {
   lineLength,
   windows,
-  topVibratedNo,
   KLINE_FILE,
   PLOT_CSV_FILE,
 } = require('./config')
+
+KLINE_FILE = `./savedData/klines/klines-simulate-3.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
 
 let vibrateWhiteList = []
 let volumeWhiteList = []
+let topVibratedNo = 5
+let topVolumeNo = 10
+let observeWindow = 300
+
+//let whiteList = []
+
+let whiteList = [
+  'LSK/BTC',
+  'ZRX/BTC',
+  'LTC/BTC',
+  'ADA/BTC',
+  'LUN/BTC',
+  'AION/BTC',
+  'MANA/BTC',
+  'ARK/BTC',
+  'MCO/BTC',
+  'AST/BTC',
+//  'NAV/BTC',
+//  'WINGS/BTC',
+//  'EDO/BTC',
+//  'AION/BTC',
+//  'BAT/BTC',
+]//['WABI/BTC', 'WINGS/BTC', 'TNB/BTC'] // hand picked
 //-----------------------------------------------------------------------------
 
 function checkValueCriteria(klines, index, closeLine) {
@@ -61,9 +85,11 @@ function checkVolCriteria(volumeLine){
   return isVolumeIncreaseFast && isVolumeHigherThanAvg
 }
 
-function checkBuyingCriteria(klines, volumeLine, closeLine, openLine) {
+function checkBuyingCriteria(extractedInfo) {
+  const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
   let matchVolCriteria = checkVolCriteria(volumeLine)
   let isPricesHigherThanPrevPoint = (closeLine[lineLength - 1] > closeLine[lineLength - 2]) && (openLine[lineLength - 1] > openLine[lineLength - 2])
+  let isVibrateEnough = extractedInfo.vibrateValue > 50
   //  if (isPricesHigherThanPrevPoint) {
   //    log(closeLine[lineLength - 1], closeLine[lineLength - 2], openLine[lineLength - 1], openLine[lineLength - 2])
   //  }
@@ -78,7 +104,7 @@ function checkBuyingCriteria(klines, volumeLine, closeLine, openLine) {
   //  log(`nowMatchCriteria`, nowMatchCriteria)
   //  log(`prevMatchCriteria`, prevMatchCriteria)
 
-  return nowValueMatchCriteria && matchVolCriteria && isPricesHigherThanPrevPoint/*&& !prevValueMatchCriteria*/  //&& isFastKlineIncreaseFast
+  return nowValueMatchCriteria && matchVolCriteria && isPricesHigherThanPrevPoint /*&& isVibrateEnough*/ /*&& !prevValueMatchCriteria*/  //&& isFastKlineIncreaseFast
 }
 
 function rateCurrency(klines, volumeLine) {
@@ -102,14 +128,22 @@ function rateAndSort(extractedInfoList, whiteList) {
 
   for (let extractedInfo of extractedInfoList) {
     /**
-     * 白名单过滤 - 选择振动最强的
+     * 白名单过滤
      * */
-    if (whiteList && whiteList.length > 0 && !whiteList.includes(extractedInfo.symbol)) {
+    if (whiteList && whiteList.length > 0) {
+      if (!whiteList.includes(extractedInfo.symbol)) {
+        continue
+      }
+    }
+    /**
+     * 若无白名单，则选择振动最强的
+     * */
+    else if (vibrateWhiteList && vibrateWhiteList.length > 0 && !vibrateWhiteList.includes(extractedInfo.symbol)) {
       continue
     }
 
-    const {klines, volumeLine, closeLine, openLine} = extractedInfo
-    let matchBuyingCriteria = checkBuyingCriteria(klines, volumeLine, closeLine, openLine)
+    const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
+    let matchBuyingCriteria = checkBuyingCriteria(extractedInfo)
 
     if (matchBuyingCriteria) {
       let rate = rateCurrency(klines, volumeLine)
@@ -179,7 +213,14 @@ async function useKlineStrategy(params){
   let dropThroughKline = lastPickedTrade ? lastTradeCurrentState.closeLine[lineLength-1] < lastTradeCurrentState.klines[windows[0]][lineLength-1] : false
   //  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[lineLength-1] - lastTradeCurrentState.closeLine[lineLength-2])/lastTradeCurrentState.closeLine[lineLength-1] : 0
   //  let bigChangeInPrice = recentPriceDiff < -0.03
-  let earnedEnough = potentialProfit >= 0.50
+//  let earnedEnough = potentialProfit >= 0.50
+  let targetValue = lastPickedTrade ? Math.sqrt(lastTradeCurrentState.meanSquareError) : 0
+  let earnedEnough = false//lastPickedTrade ? (potentialProfit >= targetValue) : false
+//  let earnedEnough = lastPickedTrade ? true : false
+
+  if (lastPickedTrade) {
+    log(`targetValue ${targetValue}`.blue)
+  }
   //  let noLongerGoodTrade = lastPickedTrade
   //    ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1, lastTradeCurrentState.closeLine )
   //    : false
@@ -337,13 +378,13 @@ async function useKlineStrategy(params){
       //    }
       // buy in this symbol
       if (earnedEnough || dropThroughKline) {
-        log(`Sell ${lastPickedTrade.symbol}`.green)
+        log(`Sell ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
         newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1]
         lastPickedTrade = null
       } else {
         lastPickedTrade = pickedTrade
-        log(`Buy in ${lastPickedTrade.symbol}`)
+        log(`Buy in ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
       }
     }
@@ -392,7 +433,7 @@ async function timeWalk(extractedInfoList){
 
   while (shift + lineLength < extractedInfoList[0].volumeLine.length) {
     let newExtractedInfoList = cutExtractedInfoList (extractedInfoList, shift, lineLength)
-    fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
+//    fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
     let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
@@ -400,21 +441,19 @@ async function timeWalk(extractedInfoList){
     /**
      * 给 newExtractedInfoList 添加 vibrateValue 和 BTCVolume
      * */
-    extractedInfoList = addVibrateValue(extractedInfoList, observeLength)
-    extractedInfoList = addBTCVolValue(extractedInfoList, observeLength)
+//    extractedInfoList = addVibrateValue(extractedInfoList, observeWindow)
+//    extractedInfoList = addBTCVolValue(extractedInfoList, observeWindow)
 
     /**
      * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,
      * */
-    let topVibrated = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
-    vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
-    log(topVibrated.map(o => `${o.symbol}: ${o.vibrateValue}`).join(' '))
+//    let topVibrated = getTopVibrated(extractedInfoList, topVibratedNo, observeWindow)
+//    vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
+//    log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
 
-    let topVolume = getTopVolume(newExtractedInfoList, 10, newInfoLength)
-    volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
-    log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
-
-
+//    let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
+//    volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
+//    log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
     /** useKlineStrategy */
     let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})
@@ -474,10 +513,10 @@ async function timeWalk(extractedInfoList){
          * Read data and get currentTime
          * */
 
-        let cachedModule = require.cache[require.resolve('../savedData/klines/klines')]
+        let cachedModule = require.cache[require.resolve(`.${KLINE_FILE}`)] //KLINE_FILE = ./savedData/klines/klines-simulate.js
         if (cachedModule) {
-          delete require.cache[require.resolve('../savedData/klines/klines')].parent.children//Clear require cache
-          delete require.cache[require.resolve('../savedData/klines/klines')]
+          delete require.cache[require.resolve(`.${KLINE_FILE}`)].parent.children//Clear require cache
+          delete require.cache[require.resolve(`.${KLINE_FILE}`)]
         }
 
         let extractedInfoList = null
@@ -486,7 +525,7 @@ async function timeWalk(extractedInfoList){
          * */
         while (!extractedInfoList || !extractedInfoList[0]) {
           await api.sleep(100)
-          extractedInfoList = require('../savedData/klines/klines')
+          extractedInfoList = require(`.${KLINE_FILE}`)
         }
 
         let newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
@@ -515,15 +554,22 @@ async function timeWalk(extractedInfoList){
           prevExtractedInfoList = extractedInfoList
         }
 
-        /**
-         * 只看topVibrated的那几个
-         * */
-          //        let whiteList = getTopVibrated(extractedInfoList, topVibratedNo)
-        let topVibrated = getTopVibrated(newExtractedInfoList, topVibratedNo, 30)
-        log(topVibrated.map(o => `${o.symbol}: ${o.vibrateValue}`).join(' '))
-        let whiteList = (topVibrated).map(o => `${o.symbol}`)
+//        /**
+//         * 给 newExtractedInfoList 添加 vibrateValue 和 BTCVolume
+//         * */
+//        extractedInfoList = addVibrateValue(extractedInfoList, observeWindow)
+//        extractedInfoList = addBTCVolValue(extractedInfoList, observeWindow)
+//
+//        /**
+//         * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,
+//         * */
+//        let topVibrated = getTopVibrated(newExtractedInfoList, topVibratedNo, observeWindow)
+//        vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
+//        log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
 
-        console.log('topVibrated', whiteList)
+//        let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
+//        volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
+//        log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
 
         let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
@@ -558,7 +604,7 @@ async function timeWalk(extractedInfoList){
     /**
      * TimeWalk simulation
      * */
-    const extractedInfoList = require('../savedData/klines/klines')
+    const extractedInfoList = require(`.${KLINE_FILE}`)
     try {
       await timeWalk(extractedInfoList)
     } catch (error) {

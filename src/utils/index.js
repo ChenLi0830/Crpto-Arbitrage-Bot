@@ -113,22 +113,30 @@ function addVibrateValue(extractedInfoList, observeLength) {
       //      console.log('extractedInfoList', extractedInfoList)
     }
     let meanClose = _.mean(extractedInfo.closeLine)
-    //    let meanSquareError = 0
-    //    for (let price of extractedInfo.closeLine) {
-    //      meanSquareError = meanSquareError + Math.pow((price - meanClose)/meanClose, 2)
-    //    }
+    let totalSquareError = 0
     let infoLength = extractedInfo.closeLine.length
     let vibrateValue = 0
+//    for (let i=Math.max(infoLength - observeLength + 1, 0); i<infoLength; i++) {
     for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
       /**
        * 只看增长部分
        * */
-      let increaseValue = (extractedInfo.closeLine[i] - extractedInfo.closeLine[i-1]) / extractedInfo.closeLine[i-1]
-      if (increaseValue > 0) {
-        vibrateValue += increaseValue
-      }
+//      let increaseValue = (extractedInfo.closeLine[i] - extractedInfo.closeLine[i-1]) / extractedInfo.closeLine[i-1]
+//      if (increaseValue > 0) {
+//        vibrateValue += increaseValue
+//      }
+      /**
+       * 均方差
+       * */
+//      console.log('meanClose', meanClose)
+//      if (extractedInfo.closeLine[i] === undefined) {
+//        console.log('i', i)
+//      }
+      totalSquareError = totalSquareError + Math.pow((extractedInfo.closeLine[i] - meanClose)/meanClose, 2)
     }
     extractedInfo.vibrateValue = vibrateValue
+    extractedInfo.meanSquareError = totalSquareError/observeLength
+//    console.log('extractedInfo.meanSquareError', extractedInfo.meanSquareError)
   }
   return extractedInfoList
 }
@@ -137,18 +145,23 @@ function addVibrateValue(extractedInfoList, observeLength) {
 /**
  * Get top vibrated
  * */
-function getTopVibrated(extractedInfoList, topVibratedNo, observeLength = 50){
-  addVibrateValue(extractedInfoList, observeLength)
+function getTopVibrated(extractedInfoList, topVibratedNo, observeWindow = 50){
+  extractedInfoList = addVibrateValue(extractedInfoList, observeWindow)
 
-  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.vibrateValue)
+//  console.log('extractedInfoList', extractedInfoList.map(o => `${o.symbol} ${o.meanSquareError}`))
+
+  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.meanSquareError)
+
+//  console.log('sortedExtractedInfoList', sortedExtractedInfoList.map(o => `${o.symbol} ${o.meanSquareError}`))
+
   return sortedExtractedInfoList.slice(0, topVibratedNo)
 }
 
-function addBTCVolValue(extractedInfoList, observeLength) {
+function addBTCVolValue(extractedInfoList, observeWindow) {
   for ( let extractedInfo of extractedInfoList ) {
     let infoLength = extractedInfo.closeLine.length
     let totalVolume = 0
-    for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
+    for (let i=infoLength - observeWindow + 1; i<infoLength; i++) {
       /**
        * 对应的BTCVolume = volume * price
        * */
@@ -163,8 +176,8 @@ function addBTCVolValue(extractedInfoList, observeLength) {
 /**
  * Get Top Volume
  * */
-function getTopVolume(extractedInfoList, topVolumeNo, observeLength = 50){
-  addBTCVolValue(extractedInfoList, observeLength)
+function getTopVolume(extractedInfoList, topVolumeNo, observeWindow = 50){
+  addBTCVolValue(extractedInfoList, observeWindow)
   let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.BTCVolume)
   return sortedExtractedInfoList.slice(0, topVolumeNo)
 }

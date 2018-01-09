@@ -513,19 +513,19 @@ async function timeWalk(extractedInfoList){
          * Read data and get currentTime
          * */
 
-        let cachedModule = require.cache[require.resolve(`.${KLINE_FILE}`)] //KLINE_FILE = ./savedData/klines/klines-simulate.js
-        if (cachedModule) {
-          delete require.cache[require.resolve(`.${KLINE_FILE}`)].parent.children//Clear require cache
-          delete require.cache[require.resolve(`.${KLINE_FILE}`)]
-        }
-
         let extractedInfoList = null
         /**
          * 用 while 读取，防止出现文件更新时读取的情况
          * */
         while (!extractedInfoList || !extractedInfoList[0]) {
+          let cachedModule = require.cache[require.resolve('../savedData/klines/klines')]
+          if (cachedModule) {
+            delete require.cache[require.resolve('../savedData/klines/klines')].parent.children//Clear require cache
+            delete require.cache[require.resolve('../savedData/klines/klines')]
+          }
+
           await api.sleep(100)
-          extractedInfoList = require(`.${KLINE_FILE}`)
+          extractedInfoList = require('../savedData/klines/klines')
         }
 
         let newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)

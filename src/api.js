@@ -20,7 +20,7 @@ const handleError = async (e) => {
   }
   else if (e instanceof ccxt.RequestTimeout) {
     log.bright.yellow('[Request Timeout]')
-    await sleep(300 * 1000)
+
   }
   else if (e instanceof ccxt.AuthenticationError) {
     log.bright.yellow('[Authentication Error]')

@@ -11,11 +11,13 @@ const moment = require('moment')
 const credentials = require('../credentials')
 const {MinorError, MajorError} = require('./utils/errors')
 const utils = require('./utils')
+const player = require('play-sound')(opts = {})
 const {
   retryExTaskIfTimeout,
   cutExtractedInfoList,
   getTopVibrated,
   getTopVolume,
+  getTopWeighted,
   addVibrateValue,
   addBTCVolValue,
 } = utils
@@ -27,35 +29,31 @@ let {
   PLOT_CSV_FILE,
 } = require('./config')
 
-KLINE_FILE = `./savedData/klines/klines-simulate-3.js`
+//lineLength = 24*7*60/5//todo 测试成功放到config里，否则删掉
+//KLINE_FILE = `./savedData/klines/klines-simulate-30.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
 
 let vibrateWhiteList = []
 let volumeWhiteList = []
-let topVibratedNo = 5
+let topVibratedNo = 10
 let topVolumeNo = 10
+let topWeightNo = 50
 let observeWindow = 300
 
 //let whiteList = []
 
+/**
+ * 高持续度增长
+ * 有阶跃
+ * */
 let whiteList = [
-  'LSK/BTC',
-  'ZRX/BTC',
-  'LTC/BTC',
-  'ADA/BTC',
-  'LUN/BTC',
-  'AION/BTC',
-  'MANA/BTC',
-  'ARK/BTC',
-  'MCO/BTC',
-  'AST/BTC',
-//  'NAV/BTC',
-//  'WINGS/BTC',
-//  'EDO/BTC',
-//  'AION/BTC',
-//  'BAT/BTC',
+  'NEO/BTC', // 1 1
+  'FUN/BTC', // 1 1
+  'ZRX/BTC', // 1 1
+  'LRC/BTC', // 1 1
+  'ELF/BTC', // 1 1
 ]//['WABI/BTC', 'WINGS/BTC', 'TNB/BTC'] // hand picked
 //-----------------------------------------------------------------------------
 
@@ -260,7 +258,11 @@ async function useKlineStrategy(params){
 
         log(`--- Start Selling`.blue)
 
-        let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, targetBalance])
+        player.play('./src/Purr.aiff', (err) => {
+          if (err) throw err
+        })
+
+        let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, targetBalance, {'recvWindow': 60*10*1000}])
         //        let sellResult = await exchange.createMarketSellOrder(symbol, targetBalance)
         log(`--- Selling Result`.blue, sellResult)
 
@@ -292,12 +294,16 @@ async function useKlineStrategy(params){
 
         log(`--- Buy in ${pickedTrade.symbol} at ${weightedBuyPrice} with BTCAmount ${BTCAmount}`.blue)
 
+        player.play('./src/Glass.aiff', (err) => {
+          if (err) throw err
+        })
+
         /**
          * 买三次，避免买不到
          * */
         let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
 
-        let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7])
+        let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7, {'recvWindow': 60*10*1000}])
         //        let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
         console.log('buyResult', buyResult)
         if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -311,7 +317,7 @@ async function useKlineStrategy(params){
           let BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
-          let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7])
+          let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7, {'recvWindow': 60*10*1000}])
           //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Second buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -323,7 +329,7 @@ async function useKlineStrategy(params){
           BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           maxAmount = BTCAmount * 0.999 / weightedBuyPrice
-          buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7])
+          buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7, {'recvWindow': 60*10*1000}])
           //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Third buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -451,7 +457,15 @@ async function timeWalk(extractedInfoList){
 //    vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
 //    log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
 
-//    let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
+    /**
+     * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,
+     * */
+    //    let topVibrated = getTopVibrated(extractedInfoList, topVibratedNo, observeWindow)
+    //    vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
+    //    log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
+
+
+    //    let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
 //    volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
 //    log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
@@ -502,6 +516,7 @@ async function timeWalk(extractedInfoList){
 
     log(`---------- Fetching Balance ----------`.green)
     //    let money = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
+//    let money = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
     let money = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
     log(`---        BTC Balance - ${money}`.green)
     log(`---------- Fetching Balance ---------- \n`.green)

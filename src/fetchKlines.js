@@ -95,6 +95,8 @@ function printLine(lineData){
 
     log(`---       windows ${windows}`)
     log(`---       lineLength ${lineLength}`)
+    log(`---       KLINE_FILE ${KLINE_FILE}`)
+
   }
 
   while (true) { // keep fetching

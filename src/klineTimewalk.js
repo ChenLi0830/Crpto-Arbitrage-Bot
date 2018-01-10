@@ -303,7 +303,7 @@ async function useKlineStrategy(params){
          * */
         let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
 
-        let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7, {'recvWindow': 60*10*1000}])
+        let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, Math.trunc(maxAmount * 0.7), {'recvWindow': 60*10*1000}])
         //        let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
         console.log('buyResult', buyResult)
         if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -317,7 +317,7 @@ async function useKlineStrategy(params){
           let BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
-          let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7, {'recvWindow': 60*10*1000}])
+          let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, Math.trunc(maxAmount * 0.7), {'recvWindow': 60*10*1000}])
           //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Second buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -329,7 +329,7 @@ async function useKlineStrategy(params){
           BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           maxAmount = BTCAmount * 0.999 / weightedBuyPrice
-          buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, maxAmount * 0.7, {'recvWindow': 60*10*1000}])
+          buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, Math.trunc(maxAmount * 0.7), {'recvWindow': 60*10*1000}])
           //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Third buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {

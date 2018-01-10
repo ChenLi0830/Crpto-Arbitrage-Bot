@@ -29,14 +29,15 @@ let {
   PLOT_CSV_FILE,
 } = require('./config')
 
-//lineLength = 24*7*60/5//todo 测试成功放到config里，否则删掉
-//KLINE_FILE = `./savedData/klines/klines-simulate-30.js`
+lineLength = 3 * 24 * 60 / 5//todo 测试成功放到config里，否则删掉
+KLINE_FILE = `./savedData/klines/klines-simulate-7.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
 
 let vibrateWhiteList = []
 let volumeWhiteList = []
+let weightWhiteList = []
 let topVibratedNo = 10
 let topVolumeNo = 10
 let topWeightNo = 50
@@ -49,9 +50,9 @@ let observeWindow = 300
  * 有阶跃
  * */
 let whiteList = [
-  'ETH/BTC',
-  'XRP/BTC',
-  'MCO/BTC',
+  'EOS/BTC',
+//  'XRP/BTC',
+//  'MCO/BTC',
 ]
 
 //-----------------------------------------------------------------------------
@@ -136,6 +137,9 @@ function rateAndSort(extractedInfoList, whiteList) {
      * 若无白名单，则选择振动最强的
      * */
     else if (vibrateWhiteList && vibrateWhiteList.length > 0 && !vibrateWhiteList.includes(extractedInfo.symbol)) {
+      continue
+    }
+    else if (weightWhiteList && weightWhiteList.length > 0 && !weightWhiteList.includes(extractedInfo.symbol)) {
       continue
     }
 
@@ -434,6 +438,7 @@ function useVolumeStrategy(params) {
 
 async function timeWalk(extractedInfoList){
   let shift = 0
+//  let shift = 8901 - 2016 - 1
   let money = 100
   let lastPickedTrade = null // for kline strategy
   let lastPickedTradeList = [] // for volume strategy
@@ -455,9 +460,10 @@ async function timeWalk(extractedInfoList){
     /**
      * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,
      * */
-//    let topVibrated = getTopVibrated(extractedInfoList, topVibratedNo, observeWindow)
-//    vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
-//    log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
+    let topWeighted = getTopWeighted(newExtractedInfoList, topVibratedNo, 3 * 24 * 60 / 5)
+    weightWhiteList = (topWeighted).map(o => `${o.symbol}`)
+    console.log('weightWhiteList', weightWhiteList)
+    log(topWeighted.map(o => `${o.symbol}: ${o.weightValue}`).join(' '))
 
     /**
      * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,

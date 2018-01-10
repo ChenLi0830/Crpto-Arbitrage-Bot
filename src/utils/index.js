@@ -5,6 +5,7 @@ const json2csv = require('json2csv')
 const fs = require('fs')
 const promiseRetry = require('promise-retry')
 const _ = require('lodash')
+const {timeWalkCalcProfit} = require('../pickCoinMomentum')
 
 function resetConsole () {
   const readline = require('readline')
@@ -139,17 +140,18 @@ function addVibrateValue(extractedInfoList, observeLength) {
 
 function addWeightValue(extractedInfoList, observeLength) {
   for ( let extractedInfo of extractedInfoList ) {
-    let infoLength = extractedInfo.closeLine.length
+    let profitLine = timeWalkCalcProfit([extractedInfo])
+
     let weight = 0
     let momentum = 0
     //    for (let i=Math.max(infoLength - observeLength + 1, 0); i<infoLength; i++) {
-    for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
-      let priceDifPercent = (extractedInfo.closeLine[i] - extractedInfo.closeLine[i-1])/extractedInfo.closeLine[i-1]
-//      console.log('priceDifPercent', priceDifPercent)
+    for (let i=Math.max(profitLine.length - observeLength + 1, 0) ; i<profitLine.length; i++) {
+      let priceDifPercent = (profitLine[i] - profitLine[i-1])/profitLine[i-1]
+      if (isNaN(priceDifPercent)) { // 当priceDif为0时，处理特殊情况
+        priceDifPercent = 0
+      }
       let isIncreasing = priceDifPercent > 0
-//      console.log('isIncreasing', isIncreasing)
       let diffAbs = Math.abs(priceDifPercent)
-//      console.log('diffAbs', diffAbs)
 
       momentum = momentum + (isIncreasing ? 1 : -1)
 //      console.log('momentum', momentum)
@@ -158,19 +160,30 @@ function addWeightValue(extractedInfoList, observeLength) {
        * 当持续增加
        * */
       if (momentum > 0 && isIncreasing) {
-        weight = weight + momentum * diffAbs // 增加weight
+        weight = weight + Math.sqrt(momentum) * diffAbs // 增加weight
       }
       /**
        * 当持续减少
        * */
       else if (momentum < 0 && !isIncreasing) {
-        weight = weight + momentum * diffAbs // 减少weight
+        weight = weight - Math.sqrt(-momentum) * diffAbs // 减少weight
       }
       /**
        * 当与势能momentum相反
        * */
       else {
+        let prevWeight = weight
         weight = weight + diffAbs * (isIncreasing ? 1 : -1) // 不记入势能
+        if (prevWeight * weight < 0) { // 新的点把势能反转
+          momentum = 0
+        }
+      }
+
+      if (isNaN(weight)){
+        console.log('Math.sqrt(momentum)', Math.sqrt(momentum))
+        console.log('diffAbs', diffAbs)
+        console.log('momentum', momentum)
+        process.exit()
       }
     }
     extractedInfo.weightValue = weight
@@ -182,12 +195,9 @@ function addWeightValue(extractedInfoList, observeLength) {
  * 获得最高势能（稳增+阶跃）的几个币
  * */
 function getTopWeighted(extractedInfoList, topWeightNo, observeWindow = 7*24*60/5){
-  console.log('observeWindow', observeWindow)
   extractedInfoList = addWeightValue(extractedInfoList, observeWindow)
 
   let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.weightValue)
-  console.log('sortedExtractedInfoList', sortedExtractedInfoList.map(o => `${o.symbol} ${o.weightValue}`))
-
   return sortedExtractedInfoList.slice(0, topWeightNo)
 }
 

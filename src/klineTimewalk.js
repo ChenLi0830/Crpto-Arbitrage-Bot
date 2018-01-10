@@ -49,12 +49,11 @@ let observeWindow = 300
  * 有阶跃
  * */
 let whiteList = [
-  'NEO/BTC', // 1 1
-  'FUN/BTC', // 1 1
-  'ZRX/BTC', // 1 1
-  'LRC/BTC', // 1 1
-  'ELF/BTC', // 1 1
-]//['WABI/BTC', 'WINGS/BTC', 'TNB/BTC'] // hand picked
+  'ETH/BTC',
+  'XRP/BTC',
+  'MCO/BTC',
+]
+
 //-----------------------------------------------------------------------------
 
 function checkValueCriteria(klines, index, closeLine) {
@@ -302,8 +301,9 @@ async function useKlineStrategy(params){
          * 买三次，避免买不到
          * */
         let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
+        let buyInAmount = maxAmount * 0.7 > 1 ? Math.trunc(maxAmount * 0.7) : maxAmount * 0.7
 
-        let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, Math.trunc(maxAmount * 0.7), {'recvWindow': 60*10*1000}])
+        let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
         //        let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
         console.log('buyResult', buyResult)
         if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -317,7 +317,8 @@ async function useKlineStrategy(params){
           let BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
-          let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, Math.trunc(maxAmount * 0.7), {'recvWindow': 60*10*1000}])
+          let buyInAmount = maxAmount * 0.7 > 1 ? Math.trunc(maxAmount * 0.7) : maxAmount * 0.7
+          let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
           //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Second buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -329,7 +330,8 @@ async function useKlineStrategy(params){
           BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           maxAmount = BTCAmount * 0.999 / weightedBuyPrice
-          buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, Math.trunc(maxAmount * 0.7), {'recvWindow': 60*10*1000}])
+          buyInAmount = maxAmount * 0.7 > 1 ? Math.trunc(maxAmount * 0.7) : maxAmount * 0.7
+          buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
           //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Third buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -466,8 +468,8 @@ async function timeWalk(extractedInfoList){
 
 
     //    let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
-//    volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
-//    log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+    //    volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
+    //    log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
     /** useKlineStrategy */
     let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})

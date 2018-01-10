@@ -108,10 +108,6 @@ function cutExtractedInfoList (extractedInfoList, start, lineLength) {
 
 function addVibrateValue(extractedInfoList, observeLength) {
   for ( let extractedInfo of extractedInfoList ) {
-    if (!extractedInfo) {
-      console.log('undefined', extractedInfo)
-      //      console.log('extractedInfoList', extractedInfoList)
-    }
     let meanClose = _.mean(extractedInfo.closeLine)
     let totalSquareError = 0
     let infoLength = extractedInfo.closeLine.length
@@ -141,6 +137,59 @@ function addVibrateValue(extractedInfoList, observeLength) {
   return extractedInfoList
 }
 
+function addWeightValue(extractedInfoList, observeLength) {
+  for ( let extractedInfo of extractedInfoList ) {
+    let infoLength = extractedInfo.closeLine.length
+    let weight = 0
+    let momentum = 0
+    //    for (let i=Math.max(infoLength - observeLength + 1, 0); i<infoLength; i++) {
+    for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
+      let priceDifPercent = (extractedInfo.closeLine[i] - extractedInfo.closeLine[i-1])/extractedInfo.closeLine[i-1]
+//      console.log('priceDifPercent', priceDifPercent)
+      let isIncreasing = priceDifPercent > 0
+//      console.log('isIncreasing', isIncreasing)
+      let diffAbs = Math.abs(priceDifPercent)
+//      console.log('diffAbs', diffAbs)
+
+      momentum = momentum + (isIncreasing ? 1 : -1)
+//      console.log('momentum', momentum)
+
+      /**
+       * 当持续增加
+       * */
+      if (momentum > 0 && isIncreasing) {
+        weight = weight + momentum * diffAbs // 增加weight
+      }
+      /**
+       * 当持续减少
+       * */
+      else if (momentum < 0 && !isIncreasing) {
+        weight = weight + momentum * diffAbs // 减少weight
+      }
+      /**
+       * 当与势能momentum相反
+       * */
+      else {
+        weight = weight + diffAbs * (isIncreasing ? 1 : -1) // 不记入势能
+      }
+    }
+    extractedInfo.weightValue = weight
+  }
+  return extractedInfoList
+}
+
+/**
+ * 获得最高势能（稳增+阶跃）的几个币
+ * */
+function getTopWeighted(extractedInfoList, topWeightNo, observeWindow = 7*24*60/5){
+  console.log('observeWindow', observeWindow)
+  extractedInfoList = addWeightValue(extractedInfoList, observeWindow)
+
+  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.weightValue)
+  console.log('sortedExtractedInfoList', sortedExtractedInfoList.map(o => `${o.symbol} ${o.weightValue}`))
+
+  return sortedExtractedInfoList.slice(0, topWeightNo)
+}
 
 /**
  * Get top vibrated
@@ -150,7 +199,7 @@ function getTopVibrated(extractedInfoList, topVibratedNo, observeWindow = 50){
 
 //  console.log('extractedInfoList', extractedInfoList.map(o => `${o.symbol} ${o.meanSquareError}`))
 
-  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.meanSquareError)
+  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => obj.meanSquareError)
 
 //  console.log('sortedExtractedInfoList', sortedExtractedInfoList.map(o => `${o.symbol} ${o.meanSquareError}`))
 
@@ -193,4 +242,5 @@ module.exports = {
   getTopVolume,
   addVibrateValue,
   addBTCVolValue,
+  getTopWeighted,
 }

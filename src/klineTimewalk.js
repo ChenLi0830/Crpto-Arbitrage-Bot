@@ -29,7 +29,10 @@ let {
   PLOT_CSV_FILE,
 } = require('./config')
 
-lineLength = 50//todo 测试成功放到config里，否则删掉
+/**
+ * 测试用，lineLength是用来获得24小时vol时用的
+ * */
+//lineLength = 1 * 24 * 60 / 5//
 //KLINE_FILE = `./savedData/klines/klines-simulate-30-2.js`
 
 console.log('KLINE_FILE', KLINE_FILE)

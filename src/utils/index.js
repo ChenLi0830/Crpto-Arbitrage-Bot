@@ -161,12 +161,14 @@ function addWeightValue(extractedInfoList, observeLength) {
        * */
       if (momentum > 0 && isIncreasing) {
         weight = weight + Math.sqrt(momentum) * diffAbs // 增加weight
+//        weight = weight + momentum * diffAbs // 增加weight
       }
       /**
        * 当持续减少
        * */
       else if (momentum < 0 && !isIncreasing) {
         weight = weight - Math.sqrt(-momentum) * diffAbs // 减少weight
+//        weight = weight + momentum * diffAbs // 增加weight
       }
       /**
        * 当与势能momentum相反
@@ -235,9 +237,12 @@ function addBTCVolValue(extractedInfoList, observeWindow) {
 /**
  * Get Top Volume
  * */
-function getTopVolume(extractedInfoList, topVolumeNo, observeWindow = 50){
+function getTopVolume(extractedInfoList, topVolumeNo=undefined, observeWindow = 50, volumeThreshold=undefined){
   addBTCVolValue(extractedInfoList, observeWindow)
   let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.BTCVolume)
+  if (volumeThreshold) {
+    sortedExtractedInfoList = _.filter(sortedExtractedInfoList, obj => (obj.BTCVolume > volumeThreshold))
+  }
   return sortedExtractedInfoList.slice(0, topVolumeNo)
 }
 

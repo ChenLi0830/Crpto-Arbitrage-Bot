@@ -27,6 +27,7 @@ let {
   windows,
   KLINE_FILE,
   PLOT_CSV_FILE,
+  intervalInMillesec
 } = require('./config')
 
 /**
@@ -230,7 +231,7 @@ async function useKlineStrategy(params){
   /** get conditions */
   let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState) : 0
   //  let lostTooMuch = potentialProfit < -0.03
-  let dropThroughKline = (lastTradeCurrentState && (lastTradeCurrentState.timeLine[lineLength-1] - lastTradeCurrentState.timeLine[lineLength-2] >= 5 * 60 * 1000))
+  let dropThroughKline = (lastTradeCurrentState && (lastTradeCurrentState.timeLine[lineLength-1] - lastTradeCurrentState.timeLine[lineLength-2] >= intervalInMillesec))
     ? lastTradeCurrentState.closeLine[lineLength-1] < lastTradeCurrentState.klines[windows[0]][lineLength-1] : false
   //  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[lineLength-1] - lastTradeCurrentState.closeLine[lineLength-2])/lastTradeCurrentState.closeLine[lineLength-1] : 0
   //  let bigChangeInPrice = recentPriceDiff < -0.03

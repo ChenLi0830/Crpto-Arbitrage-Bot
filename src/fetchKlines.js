@@ -21,6 +21,7 @@ let {
   KLINE_FILE,
   blackList,
   whiteList,
+  KLINE_24H_FILE,
 } = require('./config')
 
 //-----------------------------------------------------------------------------
@@ -105,12 +106,15 @@ function printLine(lineData){
       let exchange = new ccxt.binance()
       await exchange.loadMarkets()
       let extractedInfoList = []
+      let extractedInfo24HList = []
+      let lastFetch24HTimeStamp = null
 
       if (process.env.PRODUCTION) {
-        await api.sleep(5000)
+        await api.sleep(10000)
 
         let promises = []
         let validSymbols = []
+        let promiseList24H = []
         exchange.symbols.forEach(symbol => {
           if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) {
 
@@ -126,15 +130,19 @@ function printLine(lineData){
 
             validSymbols.push(symbol)
             promises.push(exchange.fetchOHLCV(symbol, interval, undefined, recordNb))
+            promiseList24H.push(exchange.fetchOHLCV(symbol, '30m', undefined, 48))
           }
         })
 
         let ohlcvList = await Promise.all(promises)
+        let ohlcv24HList = await Promise.all(promiseList24H)
         console.log('ohlcvList.length', ohlcvList.length)
+        console.log('ohlcv24HList.length', ohlcv24HList.length)
 
         for (let i=0; i<ohlcvList.length; i++) {
           let ohlcv = ohlcvList[i]
           let symbol = validSymbols[i]
+          let ohlcv24H = ohlcv24HList[i]
 
           if (ohlcv.length < recordNb){
             log(`symbol ${symbol} doesn't have that much history data, skipping it`.yellow)
@@ -142,7 +150,9 @@ function printLine(lineData){
           }
 
           let extractedInfo = extractOHLCVInfo(ohlcv, symbol)
+          let extractedInfo24H = extractOHLCVInfo(ohlcv24H, symbol)
           extractedInfoList.push(extractedInfo)
+          extractedInfo24HList.push(extractedInfo24H)
         }
       }
       else {
@@ -200,6 +210,7 @@ function printLine(lineData){
 
       log(`klineDataLength ${extractedInfoList[0].klines[windows[0]].length}`)
       fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
+      fs.writeFileSync(KLINE_24H_FILE, 'module.exports = ' + JSON.stringify(extractedInfo24HList), 'utf-8')
     } catch (e) {
       console.log(new Date())
       console.error(e)

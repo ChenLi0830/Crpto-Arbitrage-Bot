@@ -29,31 +29,46 @@ let {
   PLOT_CSV_FILE,
 } = require('./config')
 
-lineLength = 3 * 24 * 60 / 5//todo 测试成功放到config里，否则删掉
-KLINE_FILE = `./savedData/klines/klines-simulate-7.js`
+//lineLength = 7 * 24 * 60 / 5//todo 测试成功放到config里，否则删掉
+//lineLength = 1 * 24 * 60 / 5//todo 测试成功放到config里，否则删掉
+lineLength = 50//todo 测试成功放到config里，否则删掉
+//KLINE_FILE = `./savedData/klines/klines-simulate-30-2.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
 
 let vibrateWhiteList = []
-let volumeWhiteList = []
+let volumeWhiteList4H = []
+let volumeWhiteList24H = []
 let weightWhiteList = []
 let topVibratedNo = 10
 let topVolumeNo = 10
-let topWeightNo = 50
+let topWeightNo = 10
 let observeWindow = 300
 
-//let whiteList = []
+let whiteList = []
 
 /**
  * 高持续度增长
  * 有阶跃
  * */
-let whiteList = [
-  'EOS/BTC',
+//let whiteList = [
+//  'TRX/BTC',
+//  'ETH/BTC',
+//  'VIBE/BTC',
 //  'XRP/BTC',
-//  'MCO/BTC',
-]
+//  'BCC/BTC',
+//  'VEN/BTC',
+//  'APPC/BTC',
+//  'ELF/BTC',
+//  'EOS/BTC',
+//  'XVG/BTC',
+//  'NEO/BTC',
+//  'LTC/BTC',
+//  'NEBL/BTC',
+//  'ICX/BTC',
+//  'ADA/BTC',
+//]
 
 //-----------------------------------------------------------------------------
 
@@ -128,6 +143,9 @@ function rateAndSort(extractedInfoList, whiteList) {
     /**
      * 白名单过滤
      * */
+    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
+    whiteList = [...whiteListSet].slice(0, topVolumeNo)
+
     if (whiteList && whiteList.length > 0) {
       if (!whiteList.includes(extractedInfo.symbol)) {
         continue
@@ -458,24 +476,33 @@ async function timeWalk(extractedInfoList){
 //    extractedInfoList = addBTCVolValue(extractedInfoList, observeWindow)
 
     /**
-     * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,
+     * 用momentum获得对应的whiteList -> weightWhiteList,
      * */
-    let topWeighted = getTopWeighted(newExtractedInfoList, topVibratedNo, 3 * 24 * 60 / 5)
-    weightWhiteList = (topWeighted).map(o => `${o.symbol}`)
-    console.log('weightWhiteList', weightWhiteList)
-    log(topWeighted.map(o => `${o.symbol}: ${o.weightValue}`).join(' '))
+//    if ((shift % 288) === 0) {
+//      let startDate = new Date()
+//      let topWeighted = getTopWeighted(newExtractedInfoList, topWeightNo, 3 * 24 * 60 / 5)
+//      weightWhiteList = (topWeighted).map(o => `${o.symbol}`)
+//      console.log('weightWhiteList', weightWhiteList)
+//      log(topWeighted.map(o => `${o.symbol}: ${o.weightValue}`).join(' '))
+//    }
 
     /**
-     * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,
+     * 用Vibrate获得对应的whiteList -> vibrateWhiteList,
      * */
     //    let topVibrated = getTopVibrated(extractedInfoList, topVibratedNo, observeWindow)
     //    vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
     //    log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
 
+    /**
+     * 用Volume获得对应的whiteList -> volumeWhiteList,
+     * */
+    let topVolume = getTopVolume(newExtractedInfoList, undefined, 24 * 60 / 5, 5000)
+    volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+    log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-    //    let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
-    //    volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
-    //    log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+    topVolume = getTopVolume(newExtractedInfoList, undefined, 4 * 60 / 5, 5000 / 6)
+    volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+    log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
     /** useKlineStrategy */
     let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})
@@ -537,18 +564,22 @@ async function timeWalk(extractedInfoList){
          * */
 
         let extractedInfoList = null
+        let extractedInfo24HList = null
         /**
          * 用 while 读取，防止出现文件更新时读取的情况
          * */
-        while (!extractedInfoList || !extractedInfoList[0]) {
+        while (!extractedInfoList || !extractedInfoList[0] || !extractedInfo24HList || !extractedInfo24HList[0]) {
           let cachedModule = require.cache[require.resolve('../savedData/klines/klines')]
           if (cachedModule) {
             delete require.cache[require.resolve('../savedData/klines/klines')].parent.children//Clear require cache
             delete require.cache[require.resolve('../savedData/klines/klines')]
+            delete require.cache[require.resolve('../savedData/klines/klines24H')].parent.children//Clear require cache
+            delete require.cache[require.resolve('../savedData/klines/klines24H')]
           }
 
           await api.sleep(100)
           extractedInfoList = require('../savedData/klines/klines')
+          extractedInfo24HList = require('../savedData/klines/klines24H')
         }
 
         let newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
@@ -593,6 +624,14 @@ async function timeWalk(extractedInfoList){
 //        let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
 //        volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
 //        log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
+        let volLength = extractedInfo24HList[0].timeLine.length
+        let topVolume = getTopVolume(extractedInfo24HList, undefined, volLength, 5000)
+        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+
+        topVolume = getTopVolume(extractedInfo24HList, undefined, volLength / 6, 5000 / 6)
+        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
         let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')

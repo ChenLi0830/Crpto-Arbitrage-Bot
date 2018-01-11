@@ -29,8 +29,6 @@ let {
   PLOT_CSV_FILE,
 } = require('./config')
 
-//lineLength = 7 * 24 * 60 / 5//todo 测试成功放到config里，否则删掉
-//lineLength = 1 * 24 * 60 / 5//todo 测试成功放到config里，否则删掉
 lineLength = 50//todo 测试成功放到config里，否则删掉
 //KLINE_FILE = `./savedData/klines/klines-simulate-30-2.js`
 

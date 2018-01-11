@@ -17,6 +17,7 @@ module.exports = {
   ohlcvIndex : 4, // [ timestamp, open, high, low, close, volume ],
 //  KLINE_FILE : `./savedData/klines/klines${process.env.PRODUCTION ? '':'-simulate'}.js`,
   KLINE_FILE : `./savedData/klines/klines${process.env.PRODUCTION ? '':'-simulate'}.js`,
+  KLINE_24H_FILE : `./savedData/klines/klines24H${process.env.PRODUCTION ? '':'-simulate'}.js`,
   PICKED_TRADE : `./savedData/pickedTrade${process.env.PRODUCTION ? '':'-simulate'}.js`,
   PLOT_CSV_FILE: `./savedData/klines/plotCsv${process.env.PRODUCTION ? '':'-simulate'}.csv`,
   blackList : [],

@@ -47,7 +47,7 @@ let topVibratedNo = 10
 let topVolumeNo = 10
 let topWeightNo = 10
 let observeWindow = 300
-let klineIndex = process.env.PRODUCTION ? lineLength - 2 : lineLength - 1 // 在生产环境中看上一个kline的index
+let klineIndex = process.env.PRODUCTION ? lineLength - 1 : lineLength - 1 // 在生产环境中看上一个kline的index
 let whiteList = []
 
 /**
@@ -144,13 +144,6 @@ function rateAndSort(extractedInfoList, whiteList) {
 
   for (let extractedInfo of extractedInfoList) {
     /**
-     * 生产环境中，旧kline刚走完，新kline刚开始时，才纳入考虑范围，否则略过
-     * */
-    let maxTimeDiff = 15 * 1000 // 新kline产生15秒之内
-    if (process.env.PRODUCTION && new Date().getTime() - extractedInfo.timeLine[klineIndex+1] > maxTimeDiff) {
-      continue
-    }
-    /**
      * 白名单过滤
      * */
     let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
@@ -239,7 +232,19 @@ async function useKlineStrategy(params){
   /** get conditions */
   let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState) : 0
   //  let lostTooMuch = potentialProfit < -0.03
-  let dropThroughKline = lastTradeCurrentState ? lastTradeCurrentState.closeLine[klineIndex] < lastTradeCurrentState.klines[windows[0]][klineIndex] : false
+
+  let dropThroughKline = false
+  /*
+  * 如果是在当前kline买入，需要等kline结束才判断是否dropThroughKline
+  * */
+  if (lastTradeCurrentState && (lastTradeCurrentState.timeLine[klineIndex] > lastPickedTrade.timeLine[klineIndex])) {
+    /**
+     * 生产环境中，卖出是用前一根kline判断
+     * */
+    let sellKline = process.env.PRODUCTION ? klineIndex-1 : klineIndex
+    dropThroughKline = lastTradeCurrentState.closeLine[sellKline] < lastTradeCurrentState.klines[windows[0]][sellKline]
+  }
+
   //  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[klineIndex] - lastTradeCurrentState.closeLine[klineIndex-1])/lastTradeCurrentState.closeLine[klineIndex] : 0
   //  let bigChangeInPrice = recentPriceDiff < -0.03
 //  let earnedEnough = potentialProfit >= 0.50
@@ -345,7 +350,7 @@ async function useKlineStrategy(params){
         log(`--- Buy in ${pickedTrade.symbol} at ${weightedBuyPrice} with BTCAmount ${BTCAmount}`.blue)
         log('last 4 close prices', pickedTrade.closeLine.slice(-4).join(', '))
         log('last 4 close timeLine', pickedTrade.timeLine.slice(-4).join(', '))
-        log('last 4 close volumeLine', lastTradeCurrentState.volumeLine.slice(-4).join(', '))
+        log('last 4 close volumeLine', pickedTrade.volumeLine.slice(-4).join(', '))
 
         player.play('./src/Glass.aiff', (err) => {
           if (err) throw err

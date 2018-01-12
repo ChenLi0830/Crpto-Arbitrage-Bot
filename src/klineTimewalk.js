@@ -147,6 +147,12 @@ function rateAndSort(extractedInfoList, whiteList) {
 
   for (let extractedInfo of extractedInfoList) {
     /**
+     * 只有当新kline走完5分钟时才会买入
+     * */
+    if (extractedInfo.timeLine[lineLength-1] - extractedInfo.timeLine[lineLength-2] < intervalInMillesec) {
+      continue
+    }
+    /**
      * 白名单过滤
      * */
     let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
@@ -278,6 +284,9 @@ async function useKlineStrategy(params){
         * */
         log(`--- Selling ${lastPickedTrade.symbol}`.blue)
 
+        log('last 4 close prices', lastTradeCurrentState.closeLine.slice(-4).join(', '))
+        log('last 4 close timeLine', lastTradeCurrentState.timeLine.slice(-4).join(', '))
+
         let symbol = lastPickedTrade.symbol
         let targetCurrency = symbol.split('/')[0]
 
@@ -336,6 +345,8 @@ async function useKlineStrategy(params){
         let weightedBuyPrice = api.weightedPrice(orderBook.asks, BTCAmount).tradePrice
 
         log(`--- Buy in ${pickedTrade.symbol} at ${weightedBuyPrice} with BTCAmount ${BTCAmount}`.blue)
+        log('last 4 close prices', pickedTrade.closeLine.slice(-4).join(', '))
+        log('last 4 close timeLine', pickedTrade.timeLine.slice(-4).join(', '))
 
         player.play('./src/Glass.aiff', (err) => {
           if (err) throw err

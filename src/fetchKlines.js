@@ -117,7 +117,7 @@ function printLine(lineData){
           last24HtimeStamp = new Date().getTime()
           needUpdate24H = true
         }
-        await api.sleep(5000)
+        await api.sleep(10000)
 
         let promises = []
         let validSymbols = []

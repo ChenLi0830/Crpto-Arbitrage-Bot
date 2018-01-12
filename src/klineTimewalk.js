@@ -55,29 +55,33 @@ let whiteList = []
  * 有阶跃
  * */
 //let whiteList = [
-//  'TRX/BTC',
-//  'ETH/BTC',
-//  'VIBE/BTC',
-//  'XRP/BTC',
-//  'BCC/BTC',
-//  'VEN/BTC',
-//  'APPC/BTC',
-//  'ELF/BTC',
-//  'EOS/BTC',
-//  'XVG/BTC',
-//  'NEO/BTC',
-//  'LTC/BTC',
-//  'NEBL/BTC',
-//  'ICX/BTC',
-//  'ADA/BTC',
+//  'DLT/BTC',
+//  'FUEL/BTC',
 //]
+
+let cutProfitList = [
+  {
+    value: 5,
+    percent: 20,
+  },
+  {
+    value: 10,
+    percent: 40,
+  },
+  {
+    value: 20,
+    percent: 20,
+  },
+]
 
 //-----------------------------------------------------------------------------
 
-function checkValueCriteria(klines, index, closeLine) {
+function checkValueCriteria(klines, index, closeLine, openLine) {
   let isFastKlineLarger = (klines[windows[0]][index] > klines[windows[1]][index]) && (klines[windows[0]][index] > klines[windows[2]][index])
   let isMiddleKlineLarger = klines[windows[1]][index] > klines[windows[2]][index]
   let priceGreaterThanFastKline = closeLine[index] > klines[windows[0]][index]
+//  let priceOpenLessThanFastKline = openLine[index] < klines[windows[0]][index]
+//  let fastKlinePassMiddleKline = klines[windows[0]][index-1] < klines[windows[1]][index-1] && klines[windows[0]][index] > klines[windows[1]][index]
 
   //  let accumatedIncrease = 0
   //  let accumulatedInterval = 0
@@ -90,7 +94,7 @@ function checkValueCriteria(klines, index, closeLine) {
   //  }
   //  let previousIncreaseNotTooBig = accumatedIncrease < 0.2 || accumulatedInterval < 5
 
-  return isFastKlineLarger && isMiddleKlineLarger && priceGreaterThanFastKline /*&& previousIncreaseNotTooBig*/
+  return isFastKlineLarger && isMiddleKlineLarger && priceGreaterThanFastKline /*&& priceOpenLessThanFastKline*/ /*&& previousIncreaseNotTooBig*/
 }
 
 function checkVolCriteria(volumeLine){
@@ -113,7 +117,7 @@ function checkBuyingCriteria(extractedInfo) {
   let currentPoint = lineLength-1
   let prevPoint = lineLength-2
 
-  let nowValueMatchCriteria = checkValueCriteria(klines, currentPoint, closeLine)
+  let nowValueMatchCriteria = checkValueCriteria(klines, currentPoint, closeLine, openLine)
   //  let prevValueMatchCriteria = checkValueCriteria(klines, prevPoint)
 
   //  log(`nowMatchCriteria`, nowMatchCriteria)
@@ -277,6 +281,21 @@ async function useKlineStrategy(params){
         let symbol = lastPickedTrade.symbol
         let targetCurrency = symbol.split('/')[0]
 
+        /**
+         * 取消当前open order
+         * */
+        let fetchOrderResult = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', [symbol])
+
+        let orderIds = fetchOrderResult.map(obj => obj.id)
+
+        let cancelPromiseList = orderIds.map(orderId => retryExTaskIfTimeout(exchange, 'cancelOrder', [orderId, symbol, {'recvWindow': 60*10*1000}]))
+
+        let results = await Promise.all(cancelPromiseList)
+
+        /**
+         * 开始卖
+         * */
+
         let targetBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free'][targetCurrency]
         log(`--- ${targetCurrency} balance ${targetBalance}`.green)
 
@@ -371,6 +390,26 @@ async function useKlineStrategy(params){
 
         lastPickedTrade = pickedTrade
 
+        /**
+         * 设置止赢
+         * */
+
+        console.log('orderBook.asks[0]', orderBook.asks[0])
+
+        let createLimitOrderPromises = cutProfitList.map(cutProfit => {
+          let cutAmount = boughtAmount * cutProfit.percent / 100
+          return retryExTaskIfTimeout(exchange, 'createLimitSellOrder', [symbol, cutAmount, orderBook.asks[0][0] * (100+cutProfit.value)/100, {'recvWindow': 60*10*1000}])
+        })
+
+        try {
+          let createLimitOrdersResult = await Promise.all(createLimitOrderPromises)
+          //        console.log('createLimitOrdersResult', createLimitOrdersResult)
+        }
+        catch (error) {
+          console.log(error)
+          log(`createLimitOrdersResult error, ignored`.red)
+        }
+
         let newBTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
         let spentBTC = BTCAmount - newBTCAmount
         log(`---    spent ${Math.trunc(100 * spentBTC/BTCAmount)}% in purchase, average purchase price ${spentBTC / boughtAmount}`)
@@ -397,7 +436,7 @@ async function useKlineStrategy(params){
 
       potentialProfit !== 0 && log(`money ${money} -> ${money * (1 + potentialProfit)}`.yellow)
 
-      money = money * (1 + potentialProfit)
+      money = money * (1 + potentialProfit) * 0.9995 // 0.001 手续费
       newPlotDot.value = money
 
       //    // buy in this symbol
@@ -627,6 +666,7 @@ async function timeWalk(extractedInfoList){
 //        let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
 //        volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
 //        log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
+
         let volLength = extractedInfo24HList[0].timeLine.length
         let topVolume = getTopVolume(extractedInfo24HList, undefined, volLength, 5000)
         volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)

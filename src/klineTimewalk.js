@@ -47,7 +47,7 @@ let topVibratedNo = 10
 let topVolumeNo = 10
 let topWeightNo = 10
 let observeWindow = 300
-
+let klineIndex = process.env.PRODUCTION ? lineLength - 2 : lineLength - 1 // 在生产环境中看上一个kline的index
 let whiteList = []
 
 /**
@@ -76,19 +76,19 @@ let cutProfitList = [
 
 //-----------------------------------------------------------------------------
 
-function checkValueCriteria(klines, index, closeLine, openLine) {
-  let isFastKlineLarger = (klines[windows[0]][index] > klines[windows[1]][index]) && (klines[windows[0]][index] > klines[windows[2]][index])
-  let isMiddleKlineLarger = klines[windows[1]][index] > klines[windows[2]][index]
-  let priceGreaterThanFastKline = closeLine[index] > klines[windows[0]][index]
-//  let priceOpenLessThanFastKline = openLine[index] < klines[windows[0]][index]
-//  let fastKlinePassMiddleKline = klines[windows[0]][index-1] < klines[windows[1]][index-1] && klines[windows[0]][index] > klines[windows[1]][index]
+function checkValueCriteria(klines, closeLine, openLine) {
+  let isFastKlineLarger = (klines[windows[0]][klineIndex] > klines[windows[1]][klineIndex]) && (klines[windows[0]][klineIndex] > klines[windows[2]][klineIndex])
+  let isMiddleKlineLarger = klines[windows[1]][klineIndex] > klines[windows[2]][klineIndex]
+  let priceGreaterThanFastKline = closeLine[klineIndex] > klines[windows[0]][klineIndex]
+//  let priceOpenLessThanFastKline = openLine[klineIndex] < klines[windows[0]][klineIndex]
+//  let fastKlinePassMiddleKline = klines[windows[0]][klineIndex-1] < klines[windows[1]][klineIndex-1] && klines[windows[0]][klineIndex] > klines[windows[1]][klineIndex]
 
   //  let accumatedIncrease = 0
   //  let accumulatedInterval = 0
-  //  for (let i=index-1; i>0; i--) {
+  //  for (let i=klineIndex-1; i>0; i--) {
   //    if (klines[windows[0]][i-1] > klines[windows[0]][i]) {
-  //      accumatedIncrease = (klines[windows[0]][index] - klines[windows[0]][i-1]) / klines[windows[0]][i-1]
-  //      accumulatedInterval = index - i
+  //      accumatedIncrease = (klines[windows[0]][klineIndex] - klines[windows[0]][i-1]) / klines[windows[0]][i-1]
+  //      accumulatedInterval = klineIndex - i
   //      break
   //    }
   //  }
@@ -98,26 +98,23 @@ function checkValueCriteria(klines, index, closeLine, openLine) {
 }
 
 function checkVolCriteria(volumeLine){
-  let isVolumeIncreaseFast = (volumeLine[lineLength-1] / volumeLine[lineLength-2]) > 1
+  let isVolumeIncreaseFast = (volumeLine[klineIndex] / volumeLine[klineIndex-1]) > 1
   let volumeAvg = _.mean(volumeLine.slice(-20))
-  let isVolumeHigherThanAvg = volumeLine[lineLength - 1] > volumeAvg
+  let isVolumeHigherThanAvg = volumeLine[klineIndex] > volumeAvg
   return isVolumeIncreaseFast && isVolumeHigherThanAvg
 }
 
 function checkBuyingCriteria(extractedInfo) {
   const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
   let matchVolCriteria = checkVolCriteria(volumeLine)
-  let isPricesHigherThanPrevPoint = (closeLine[lineLength - 1] > closeLine[lineLength - 2]) && (openLine[lineLength - 1] > openLine[lineLength - 2])
-  let isVibrateEnough = extractedInfo.vibrateValue > 50
+  let isPricesHigherThanPrevPoint = (closeLine[klineIndex] > closeLine[klineIndex-1]) && (openLine[klineIndex] > openLine[klineIndex-1])
+//  let isVibrateEnough = extractedInfo.vibrateValue > 50
   //  if (isPricesHigherThanPrevPoint) {
-  //    log(closeLine[lineLength - 1], closeLine[lineLength - 2], openLine[lineLength - 1], openLine[lineLength - 2])
+  //    log(closeLine[klineIndex], closeLine[klineIndex-1], openLine[klineIndex], openLine[klineIndex-1])
   //  }
-  //  let isFastKlineIncreaseFast = (klines[windows[0]][lineLength-1] / klines[windows[0]][lineLength-2]) > 1.1
+  //  let isFastKlineIncreaseFast = (klines[windows[0]][klineIndex] / klines[windows[0]][klineIndex-1]) > 1.1
 
-  let currentPoint = lineLength-1
-  let prevPoint = lineLength-2
-
-  let nowValueMatchCriteria = checkValueCriteria(klines, currentPoint, closeLine, openLine)
+  let nowValueMatchCriteria = checkValueCriteria(klines, closeLine, openLine)
   //  let prevValueMatchCriteria = checkValueCriteria(klines, prevPoint)
 
   //  log(`nowMatchCriteria`, nowMatchCriteria)
@@ -128,15 +125,15 @@ function checkBuyingCriteria(extractedInfo) {
 
 function rateCurrency(klines, volumeLine) {
   let fastKline = klines[windows[0]]
-  let deriveK = (fastKline[lineLength - 1] / fastKline[lineLength - 2])
-  let deriveVolume = (volumeLine[lineLength - 1] / volumeLine[lineLength - 2])
+  let deriveK = (fastKline[klineIndex] / fastKline[klineIndex-1])
+  let deriveVolume = (volumeLine[klineIndex] / volumeLine[klineIndex-1])
 
-  let volInBTC = klines[windows[0]][lineLength - 1] * volumeLine[lineLength - 1]
+  let volInBTC = klines[windows[0]][klineIndex] * volumeLine[klineIndex]
 
   //  let rate = Math.min(deriveK * deriveK * deriveK, 20) * Math.min(deriveVolume, 3) * volInBTC //* Math.sqrt(volInBTC)
   let rate = deriveK
 
-  //  if (volumeLine[lineLength - 2] === 0) { // 之前没有交易的货币不考虑
+  //  if (volumeLine[klineIndex-1] === 0) { // 之前没有交易的货币不考虑
   //    rate = - Infinity
   //  }
   return rate
@@ -147,9 +144,10 @@ function rateAndSort(extractedInfoList, whiteList) {
 
   for (let extractedInfo of extractedInfoList) {
     /**
-     * 只有当新kline走完5分钟时才会买入
+     * 生产环境中，旧kline刚走完，新kline刚开始时，才纳入考虑范围，否则略过
      * */
-    if (extractedInfo.timeLine[lineLength-1] - extractedInfo.timeLine[lineLength-2] < intervalInMillesec) {
+    let maxTimeDiff = 15 * 1000 // 新kline产生15秒之内
+    if (process.env.PRODUCTION && new Date().getTime() - extractedInfo.timeLine[klineIndex+1] > maxTimeDiff) {
       continue
     }
     /**
@@ -210,8 +208,8 @@ function noCurrentTradeOrNewTradeBetter(pickedTrade, lastPickedTrade){
 
 function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
   if (lastPickedTrade) {
-    let purchasePrice = lastPickedTrade.closeLine.slice(-1)[0]
-    let sellPrice = lastTradeCurrentState.closeLine.slice(-1)[0]
+    let purchasePrice = lastPickedTrade.closeLine[klineIndex-1]
+    let sellPrice = lastTradeCurrentState.closeLine[klineIndex]
     //    if (purchasePrice > sellPrice) {
     //      log(`${lastPickedTrade.symbol}: purchase ${purchasePrice} -> sell ${sellPrice}`.yellow)
     //    }
@@ -241,20 +239,19 @@ async function useKlineStrategy(params){
   /** get conditions */
   let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState) : 0
   //  let lostTooMuch = potentialProfit < -0.03
-  let dropThroughKline = (lastTradeCurrentState && (lastTradeCurrentState.timeLine[lineLength-1] - lastTradeCurrentState.timeLine[lineLength-2] >= intervalInMillesec))
-    ? lastTradeCurrentState.closeLine[lineLength-1] < lastTradeCurrentState.klines[windows[0]][lineLength-1] : false
-  //  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[lineLength-1] - lastTradeCurrentState.closeLine[lineLength-2])/lastTradeCurrentState.closeLine[lineLength-1] : 0
+  let dropThroughKline = lastTradeCurrentState ? lastTradeCurrentState.closeLine[klineIndex] < lastTradeCurrentState.klines[windows[0]][klineIndex] : false
+  //  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[klineIndex] - lastTradeCurrentState.closeLine[klineIndex-1])/lastTradeCurrentState.closeLine[klineIndex] : 0
   //  let bigChangeInPrice = recentPriceDiff < -0.03
 //  let earnedEnough = potentialProfit >= 0.50
   let targetValue = lastPickedTrade ? Math.sqrt(lastTradeCurrentState.meanSquareError) : 0
   let earnedEnough = false//lastPickedTrade ? (potentialProfit >= targetValue) : false
 //  let earnedEnough = lastPickedTrade ? true : false
 
-  if (lastPickedTrade) {
-    log(`targetValue ${targetValue}`.blue)
-  }
+//  if (lastPickedTrade) {
+//    log(`targetValue ${targetValue}`.blue)
+//  }
   //  let noLongerGoodTrade = lastPickedTrade
-  //    ? !checkValueCriteria(lastTradeCurrentState.klines, lineLength -1, lastTradeCurrentState.closeLine )
+  //    ? !checkValueCriteria(lastTradeCurrentState.klines, klineIndex, lastTradeCurrentState.closeLine )
   //    : false
 
   ////  /** determine if change */
@@ -272,10 +269,10 @@ async function useKlineStrategy(params){
       newPlotDot = {
         time: currentTime,
         rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
-        BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
-        volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
-        volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
-        klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
+        BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[klineIndex] * lastPickedTrade.closeLine[klineIndex] : 'n/a',
+        volume: lastPickedTrade ? lastPickedTrade.volumeLine[klineIndex] : 'n/a',
+        volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[klineIndex] / lastPickedTrade.volumeLine[klineIndex-1] : 'n/a',
+        klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][klineIndex] / lastPickedTrade.klines[windows[0]][klineIndex-1] : 'n/a',
       }
 
       if (earnedEnough || dropThroughKline) {
@@ -286,6 +283,7 @@ async function useKlineStrategy(params){
 
         log('last 4 close prices', lastTradeCurrentState.closeLine.slice(-4).join(', '))
         log('last 4 close timeLine', lastTradeCurrentState.timeLine.slice(-4).join(', '))
+        log('last 4 close volumeLine', lastTradeCurrentState.volumeLine.slice(-4).join(', '))
 
         let symbol = lastPickedTrade.symbol
         let targetCurrency = symbol.split('/')[0]
@@ -347,6 +345,7 @@ async function useKlineStrategy(params){
         log(`--- Buy in ${pickedTrade.symbol} at ${weightedBuyPrice} with BTCAmount ${BTCAmount}`.blue)
         log('last 4 close prices', pickedTrade.closeLine.slice(-4).join(', '))
         log('last 4 close timeLine', pickedTrade.timeLine.slice(-4).join(', '))
+        log('last 4 close volumeLine', lastTradeCurrentState.volumeLine.slice(-4).join(', '))
 
         player.play('./src/Glass.aiff', (err) => {
           if (err) throw err
@@ -438,11 +437,11 @@ async function useKlineStrategy(params){
         time: currentTime,
         profit: lastPickedTrade ? potentialProfit : 'n/a',
         rate: lastPickedTrade ? lastPickedTrade.rate : 'n/a',
-        BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] * lastPickedTrade.closeLine[lineLength-1] : 'n/a',
-        volume: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] : 'n/a',
-        price: lastPickedTrade ? lastPickedTrade.closeLine[lineLength-1] : 'n/a',
-        volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[lineLength-1] / lastPickedTrade.volumeLine[lineLength-2] : 'n/a',
-        klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][lineLength-1] / lastPickedTrade.klines[windows[0]][lineLength-2] : 'n/a',
+        BTCvolume: lastPickedTrade ? lastPickedTrade.volumeLine[klineIndex] * lastPickedTrade.closeLine[klineIndex] : 'n/a',
+        volume: lastPickedTrade ? lastPickedTrade.volumeLine[klineIndex] : 'n/a',
+        price: lastPickedTrade ? lastPickedTrade.closeLine[klineIndex] : 'n/a',
+        volDerive: lastPickedTrade ? lastPickedTrade.volumeLine[klineIndex] / lastPickedTrade.volumeLine[klineIndex-1] : 'n/a',
+        klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][klineIndex] / lastPickedTrade.klines[windows[0]][klineIndex-1] : 'n/a',
       }
 
       potentialProfit !== 0 && log(`money ${money} -> ${money * (1 + potentialProfit)}`.yellow)
@@ -463,7 +462,7 @@ async function useKlineStrategy(params){
       if (earnedEnough || dropThroughKline) {
         log(`Sell ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
-        newPlotDot.sellPrice = lastTradeCurrentState.closeLine[lineLength-1]
+        newPlotDot.sellPrice = lastTradeCurrentState.closeLine[klineIndex]
         lastPickedTrade = null
       } else {
         lastPickedTrade = pickedTrade
@@ -478,8 +477,8 @@ async function useKlineStrategy(params){
 
 function useVolumeStrategy(params) {
   let {newExtractedInfoList, lastPickedTradeList, money, currentTime} = params
-  let sortedByVol = _.sortBy(newExtractedInfoList, o => - (o.volumeLine[lineLength-1] * o.closeLine[lineLength-1]))
-  //  console.log('sortedByVol', sortedByVol.map(info => info.volumeLine[lineLength-1] * info.closeLine[lineLength-1]).join(' '))
+  let sortedByVol = _.sortBy(newExtractedInfoList, o => - (o.volumeLine[klineIndex] * o.closeLine[klineIndex]))
+  //  console.log('sortedByVol', sortedByVol.map(info => info.volumeLine[klineIndex] * info.closeLine[klineIndex]).join(' '))
 
   let firstFive = sortedByVol.slice(0, 5)
   log('firstFive.length', firstFive.length, firstFive.map(info => info.symbol).join(' '))
@@ -518,7 +517,7 @@ async function timeWalk(extractedInfoList){
   while (shift + lineLength < extractedInfoList[0].volumeLine.length) {
     let newExtractedInfoList = cutExtractedInfoList (extractedInfoList, shift, lineLength)
 //    fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
-    let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
+    let timeEpoch = newExtractedInfoList[0].timeLine[klineIndex]
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
 
@@ -679,13 +678,13 @@ async function timeWalk(extractedInfoList){
 //        log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
 
         let volLength = extractedInfo24HList[0].timeLine.length
-        let topVolume = getTopVolume(extractedInfo24HList, undefined, volLength, 5000)
-        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-        topVolume = getTopVolume(extractedInfo24HList, undefined, volLength / 6, 5000 / 6)
-        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+//        let topVolume = getTopVolume(extractedInfo24HList, undefined, volLength, 5000)
+//        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+//
+//        topVolume = getTopVolume(extractedInfo24HList, undefined, volLength / 6, 5000 / 6)
+//        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
         let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
         log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)

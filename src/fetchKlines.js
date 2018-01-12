@@ -26,6 +26,9 @@ let {
 
 //-----------------------------------------------------------------------------
 
+let last24HtimeStamp = null
+let needUpdate24H = true
+
 function extractOHLCVInfo(ohlcv, symbol) {
   let klines = {}
 
@@ -110,7 +113,11 @@ function printLine(lineData){
       let lastFetch24HTimeStamp = null
 
       if (process.env.PRODUCTION) {
-        await api.sleep(10000)
+        if (!last24HtimeStamp || (new Date().getTime() - last24HtimeStamp > 30 * 60 * 1000)) {
+          last24HtimeStamp = new Date().getTime()
+          needUpdate24H = true
+        }
+        await api.sleep(5000)
 
         let promises = []
         let validSymbols = []
@@ -135,14 +142,14 @@ function printLine(lineData){
         })
 
         let ohlcvList = await Promise.all(promises)
-        let ohlcv24HList = await Promise.all(promiseList24H)
+        let ohlcv24HList = needUpdate24H ? await Promise.all(promiseList24H) : []
         console.log('ohlcvList.length', ohlcvList.length)
         console.log('ohlcv24HList.length', ohlcv24HList.length)
 
         for (let i=0; i<ohlcvList.length; i++) {
           let ohlcv = ohlcvList[i]
           let symbol = validSymbols[i]
-          let ohlcv24H = ohlcv24HList[i]
+          let ohlcv24H = needUpdate24H ? ohlcv24HList[i] : null
 
           if (ohlcv.length < recordNb){
             log(`symbol ${symbol} doesn't have that much history data, skipping it`.yellow)
@@ -150,9 +157,9 @@ function printLine(lineData){
           }
 
           let extractedInfo = extractOHLCVInfo(ohlcv, symbol)
-          let extractedInfo24H = extractOHLCVInfo(ohlcv24H, symbol)
+          let extractedInfo24H = needUpdate24H ? extractOHLCVInfo(ohlcv24H, symbol) : null
           extractedInfoList.push(extractedInfo)
-          extractedInfo24HList.push(extractedInfo24H)
+          needUpdate24H && extractedInfo24HList.push(extractedInfo24H)
         }
       }
       else {
@@ -210,7 +217,12 @@ function printLine(lineData){
 
       log(`klineDataLength ${extractedInfoList[0].klines[windows[0]].length}`)
       fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
-      fs.writeFileSync(KLINE_24H_FILE, 'module.exports = ' + JSON.stringify(extractedInfo24HList), 'utf-8')
+      if (needUpdate24H) {
+        console.log('needUpdate24H', needUpdate24H)
+        console.log('extractedInfo24HList.length', extractedInfo24HList.length)
+        fs.writeFileSync(KLINE_24H_FILE, 'module.exports = ' + JSON.stringify(extractedInfo24HList), 'utf-8')
+        needUpdate24H = false
+      }
     } catch (e) {
       console.log(new Date())
       console.error(e)

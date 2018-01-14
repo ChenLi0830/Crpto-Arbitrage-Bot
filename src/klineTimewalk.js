@@ -203,13 +203,34 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
   if (lastPickedTrade) {
     let purchasePrice = lastPickedTrade.closeLine[klineIndex]
     let sellPrice = lastTradeCurrentState.closeLine[klineIndex]
-    //    if (purchasePrice > sellPrice) {
-    //      log(`${lastPickedTrade.symbol}: purchase ${purchasePrice} -> sell ${sellPrice}`.yellow)
-    //    }
 
-    //          lastTradeCurrentState.closeLine.slice(-1)[0]
+    let purchaseTime = lastPickedTrade.timeLine[klineIndex]
+    let purchaseIndex = lastTradeCurrentState.timeLine.indexOf(purchaseTime)
 
-    let profitPercent = (sellPrice - purchasePrice) / purchasePrice
+    let soldMoney = 0
+    let volPercent = 100
+    let cutProfitIndex = 0
+    for (let i = purchaseIndex; i <= klineIndex; i++){
+      /**
+       * 计算止盈点获得的钱soldMoney和剩余的volPercent
+       * */
+      while (cutProfitIndex < cutProfitList.length && lastTradeCurrentState.highLine[i] > (1 + cutProfitList[cutProfitIndex].value/100) * purchasePrice) {
+        soldMoney += ((1 + cutProfitList[cutProfitIndex].value/100) * purchasePrice * cutProfitList[cutProfitIndex].percent)
+        volPercent -= cutProfitList[cutProfitIndex].percent
+//        log(`lastTradeCurrentState.highLine[i] ${lastTradeCurrentState.highLine[i]}`.yellow)
+//        log(`(1 + cutProfitList[cutProfitIndex].value/100) * purchasePrice ${(1 + cutProfitList[cutProfitIndex].value/100) * purchasePrice}`.yellow)
+//        log('soldMoney', soldMoney)
+        cutProfitIndex++
+      }
+    }
+
+    soldMoney += (volPercent * sellPrice)
+    let avgSellPrice = soldMoney / 100
+//    log('avgSellPrice', avgSellPrice)
+
+//    let hitCost = 1.003 // 冲击成本，1为无成本
+    let hitCost = 1 // 冲击成本，1为无成本
+    let profitPercent = (avgSellPrice - purchasePrice * hitCost) / purchasePrice
     return profitPercent
   } else {
     return 0

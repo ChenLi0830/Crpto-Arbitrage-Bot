@@ -201,7 +201,7 @@ function noCurrentTradeOrNewTradeBetter(pickedTrade, lastPickedTrade){
 
 function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
   if (lastPickedTrade) {
-    let purchasePrice = lastPickedTrade.closeLine[klineIndex-1]
+    let purchasePrice = lastPickedTrade.closeLine[klineIndex]
     let sellPrice = lastTradeCurrentState.closeLine[klineIndex]
     //    if (purchasePrice > sellPrice) {
     //      log(`${lastPickedTrade.symbol}: purchase ${purchasePrice} -> sell ${sellPrice}`.yellow)
@@ -644,14 +644,14 @@ async function timeWalk(extractedInfoList){
         /**
          * Determine memory leak
          * */
-        try {
-          global.gc();
-        } catch (e) {
-          console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
-          process.exit();
-        }
-        var heapUsed = process.memoryUsage().heapUsed;
-        console.log("Program is using " + heapUsed + " bytes of Heap.")
+//        try {
+//          global.gc();
+//        } catch (e) {
+//          console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
+//          process.exit();
+//        }
+//        var heapUsed = process.memoryUsage().heapUsed;
+//        console.log("Program is using " + heapUsed + " bytes of Heap.")
 
         /**
          * Skip if extractedInfoList hasn't changed

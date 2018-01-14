@@ -222,7 +222,7 @@ function addBTCVolValue(extractedInfoList, observeWindow) {
   for ( let extractedInfo of extractedInfoList ) {
     let infoLength = extractedInfo.closeLine.length
     let totalVolume = 0
-    for (let i=infoLength - observeWindow + 1; i<infoLength; i++) {
+    for (let i=infoLength - observeWindow; i<infoLength; i++) {
       /**
        * 对应的BTCVolume = volume * price
        * */

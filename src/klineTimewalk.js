@@ -704,6 +704,11 @@ async function timeWalk(extractedInfoList){
         volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
 //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
+        topVolume = getTopVolume(extractedInfo24HList, 10, volLength / 24)
+//        console.log('topVolume', topVolume)
+//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+        log(`Top volume 1H: ${topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' ')}`.blue)
+
         let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
         log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
 

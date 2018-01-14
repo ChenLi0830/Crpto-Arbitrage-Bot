@@ -20,6 +20,7 @@ const {
   getTopWeighted,
   addVibrateValue,
   addBTCVolValue,
+  generateCutProfitList,
 } = utils
 
 let {
@@ -48,6 +49,7 @@ let topVolumeNo = 10
 let topWeightNo = 10
 let observeWindow = 300
 let klineIndex = process.env.PRODUCTION ? lineLength - 1 : lineLength - 1 // 在生产环境中看上一个kline的index
+
 let whiteList = []
 
 /**
@@ -56,23 +58,10 @@ let whiteList = []
  * */
 //let whiteList = [
 //  'DLT/BTC',
-//  'FUEL/BTC',
+//  'FUEL/BTC'
 //]
 
-let cutProfitList = [
-  {
-    value: 5,
-    percent: 20,
-  },
-  {
-    value: 10,
-    percent: 40,
-  },
-  {
-    value: 20,
-    percent: 20,
-  },
-]
+let cutProfitList = []
 
 //-----------------------------------------------------------------------------
 
@@ -147,6 +136,7 @@ function rateAndSort(extractedInfoList, whiteList) {
      * 白名单过滤
      * */
     let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
+//    whiteList = [...whiteListSet]
     whiteList = [...whiteListSet].slice(0, topVolumeNo)
 
     if (whiteList && whiteList.length > 0) {
@@ -431,6 +421,7 @@ async function useKlineStrategy(params){
          * */
 
         console.log('orderBook.asks[0]', orderBook.asks[0])
+        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5)
 
         let createLimitOrderPromises = cutProfitList.map(cutProfit => {
           let cutAmount = boughtAmount * cutProfit.percent / 100
@@ -492,6 +483,7 @@ async function useKlineStrategy(params){
         lastPickedTrade = null
       } else {
         lastPickedTrade = pickedTrade
+        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5)
         log(`Buy in ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
       }
@@ -691,26 +683,26 @@ async function timeWalk(extractedInfoList){
 //         * */
 //        extractedInfoList = addVibrateValue(extractedInfoList, observeWindow)
 //        extractedInfoList = addBTCVolValue(extractedInfoList, observeWindow)
-//
+
 //        /**
 //         * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,
 //         * */
 //        let topVibrated = getTopVibrated(newExtractedInfoList, topVibratedNo, observeWindow)
 //        vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
 //        log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
-
+//
 //        let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
 //        volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
 //        log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
 
         let volLength = extractedInfo24HList[0].timeLine.length
-//        let topVolume = getTopVolume(extractedInfo24HList, undefined, volLength, 5000)
-//        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-//
-//        topVolume = getTopVolume(extractedInfo24HList, undefined, volLength / 6, 5000 / 6)
-//        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+        let topVolume = getTopVolume(extractedInfo24HList, undefined, volLength, 5000)
+        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+
+        topVolume = getTopVolume(extractedInfo24HList, undefined, volLength / 6, 5000 / 6)
+        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
         let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
         log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)

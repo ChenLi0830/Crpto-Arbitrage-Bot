@@ -246,6 +246,48 @@ function getTopVolume(extractedInfoList, topVolumeNo=undefined, observeWindow = 
   return sortedExtractedInfoList.slice(0, topVolumeNo)
 }
 
+function generateCutProfitList(extractedInfo, observeWindow) {
+  let totalChange = 0
+  let highLine = extractedInfo.highLine.slice(-observeWindow)
+  let lowLine = extractedInfo.lowLine.slice(-observeWindow)
+  let openLine = extractedInfo.openLine.slice(-observeWindow)
+
+  for (let i=0; i<openLine.length; i++) {
+    totalChange += (100 * (highLine[i] - lowLine[i])/openLine[i])
+  }
+  let avgChange = totalChange / observeWindow
+
+  return [
+    {
+      value: avgChange * 3.5,
+      percent: 30,
+    },
+    {
+      value: avgChange * 4,
+      percent: 40,
+    },
+    {
+      value: avgChange * 5.5,
+      percent: 20,
+    },
+  ]
+
+//    return [
+//    {
+//      value: 4,
+//      percent: 20,
+//    },
+//    {
+//      value: 9,
+//      percent: 40,
+//    },
+//    {
+//      value: 15,
+//      percent: 5,
+//    },
+//  ]
+}
+
 module.exports = {
   getMarkets,
   saveJsonToCSV,
@@ -258,4 +300,5 @@ module.exports = {
   addVibrateValue,
   addBTCVolValue,
   getTopWeighted,
+  generateCutProfitList,
 }

@@ -12,6 +12,7 @@
     "ansicolor": "^1.1.71",
     "as-table": "^1.0.31",
     "asciichart": "^1.5.7",
+    "aws-sdk": "^2.181.0",
     "ccxt": "^1.10.692",
     "json2csv": "^3.11.5",
     "lodash": "^4.17.4",

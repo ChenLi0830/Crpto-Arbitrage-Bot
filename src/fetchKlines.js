@@ -8,6 +8,7 @@ const api = require('./api')
 const fs = require('fs')
 const _ = require('lodash')
 const utils = require('./utils')
+const credentials = require('../credentials')
 require('ansicolor').nice;
 
 let {
@@ -84,6 +85,17 @@ function printLine(lineData){
   log.yellow('\n' + chart, bitcoinRate, '\n')
 }
 
+async function fetchPromiseBySegment(promises, segNumber) {
+  let response = []
+  while (promises.length > 0) {
+    let promiseSeg = promises.splice(0, segNumber)
+    let newRes = await Promise.all(promiseSeg)
+    console.log(`fetched ${promiseSeg.length} klines`)
+    response = [...response, ...newRes]
+  }
+  return response
+}
+
 (async function main () {
   if (process.env.PRODUCTION) {
     log('--------- Fetching Data For Production -------'.blue)
@@ -103,10 +115,12 @@ function printLine(lineData){
 
   }
 
+  let exchangeId = 'binance'
+  let exchange = new ccxt[exchangeId](ccxt.extend(credentials[exchangeId]))
+
   while (true) { // keep fetching
 //    await api.sleep(intervalInMillesec * 0.6)
     try {
-      let exchange = new ccxt.binance()
       await exchange.loadMarkets()
       let extractedInfoList = []
       let extractedInfo24HList = []
@@ -141,8 +155,9 @@ function printLine(lineData){
           }
         })
 
-        let ohlcvList = await Promise.all(promises)
-        let ohlcv24HList = needUpdate24H ? await Promise.all(promiseList24H) : []
+
+        let ohlcvList = await fetchPromiseBySegment(promises, 10)
+        let ohlcv24HList = needUpdate24H ? await await fetchPromiseBySegment(promiseList24H, 10) : []
         console.log('ohlcvList.length', ohlcvList.length)
         console.log('ohlcv24HList.length', ohlcv24HList.length)
 
@@ -152,7 +167,7 @@ function printLine(lineData){
           let ohlcv24H = needUpdate24H ? ohlcv24HList[i] : null
 
           if (ohlcv.length < recordNb){
-            log(`symbol ${symbol} doesn't have that much history data, skipping it`.yellow)
+            log(`symbol ${symbol} doesn't have that much history data, skipping it`.green)
             continue
           }
 
@@ -191,7 +206,6 @@ function printLine(lineData){
               continue
             }
 
-            //         if numberOfFetch > 0 , 获取更多历史数据
             for (let i=0; i<numberOfFetch - 1; i++) {
               let timeStamp = ohlcv[0][0]
               let newSince = timeStamp - 500 * intervalInMillesec

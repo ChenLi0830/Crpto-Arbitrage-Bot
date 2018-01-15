@@ -23,6 +23,8 @@ const {
   generateCutProfitList,
 } = utils
 
+const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
+
 let {
   lineLength,
   windows,
@@ -48,7 +50,7 @@ let topVibratedNo = 10
 let topVolumeNo = 10
 let topWeightNo = 10
 let observeWindow = 300
-let klineIndex = process.env.PRODUCTION ? lineLength - 1 : lineLength - 1 // 在生产环境中看上一个kline的index
+let klineIndex = process.env.PRODUCTION ? 0 : lineLength - 1 // 在生产环境中看上一个kline的index
 
 let whiteList = []
 
@@ -600,6 +602,7 @@ async function timeWalk(extractedInfoList){
   let PRODUCTION = process.env.PRODUCTION
   log(`PRODUCTION ${PRODUCTION}`.red)
   if (PRODUCTION) {
+    utils.resetConsole()
     /**
      * Production
      * */
@@ -610,49 +613,26 @@ async function timeWalk(extractedInfoList){
     let exchangeId = 'binance'
     let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials[exchangeId]))
 
-    utils.resetConsole()
+    await exchange.loadMarkets()
+    let symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
 
     log(`---------- Running in Production ----------`.blue)
-    await api.sleep(3000)
-
-    log(`---        lineLength ${lineLength}`)
+    log(`---        klineIndex ${klineIndex}`)
     log(`---        windows ${windows}`)
-    log(`---        topVibratedNo ${topVibratedNo}`)
-
     log(`---------- Fetching Balance ----------`.green)
-    //    let money = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
-//    let money = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
     let money = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
     log(`---        BTC Balance - ${money}`.green)
     log(`---------- Fetching Balance ---------- \n`.green)
 
     while (true) {
       try {
-        await api.sleep(5000)
         /**
          * Read data and get currentTime
          * */
-
-        let extractedInfoList = null
-        let extractedInfo24HList = null
-        /**
-         * 用 while 读取，防止出现文件更新时读取的情况
-         * */
-        while (!extractedInfoList || !extractedInfoList[0] || !extractedInfo24HList || !extractedInfo24HList[0]) {
-          let cachedModule = require.cache[require.resolve('../savedData/klines/klines')]
-          if (cachedModule) {
-            delete require.cache[require.resolve('../savedData/klines/klines')].parent.children//Clear require cache
-            delete require.cache[require.resolve('../savedData/klines/klines')]
-            delete require.cache[require.resolve('../savedData/klines/klines24H')].parent.children//Clear require cache
-            delete require.cache[require.resolve('../savedData/klines/klines24H')]
-          }
-
-          await api.sleep(100)
-          extractedInfoList = require('../savedData/klines/klines')
-          extractedInfo24HList = require('../savedData/klines/klines24H')
-        }
-
-        let newExtractedInfoList = cutExtractedInfoList(extractedInfoList, extractedInfoList[0].timeLine.length - lineLength, lineLength)
+        let numberOfPoint = 24 * 60 / 5
+        let padding = 3
+        let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoint + padding)
+        klineIndex = extractedInfoList[0].length - 1
 
         /**
          * Determine memory leak
@@ -695,16 +675,15 @@ async function timeWalk(extractedInfoList){
 //        volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
 //        log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
 
-        let volLength = extractedInfo24HList[0].timeLine.length
-        let topVolume = getTopVolume(extractedInfo24HList, undefined, volLength, 5000)
+        let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint, 5000)
         volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
 //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-        topVolume = getTopVolume(extractedInfo24HList, undefined, volLength / 6, 5000 / 6)
+        topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 6, 5000 / 6)
         volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
 //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-        topVolume = getTopVolume(extractedInfo24HList, 10, volLength / 24)
+        topVolume = getTopVolume(extractedInfoList, 10, numberOfPoint / 24)
 //        console.log('topVolume', topVolume)
 //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
         log(`Top volume 1H: ${topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' ')}`.blue)
@@ -712,12 +691,12 @@ async function timeWalk(extractedInfoList){
         let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
         log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
 
-        let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
+        let timeEpoch = extractedInfoList[0].timeLine[lineLength-1]
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
         log(`${currentTime}: ->`.green)
 
         log(`---------- Using Kline Strategy ---------- `.green)
-        let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList})
+        let klineResult = await useKlineStrategy({newExtractedInfoList: extractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList})
 
         lastPickedTrade = klineResult.lastPickedTrade
         let newPlotDot = klineResult.newPlotDot

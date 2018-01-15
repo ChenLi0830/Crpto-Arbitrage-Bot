@@ -52,6 +52,8 @@ const util = require('util')
 const PRICE_DIFF = 0.01
 const credentials = require('../credentials.js')
 const ccxt = require('ccxt')
+const {retryExTaskIfTimeout} = require('./utils')
+const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
 
 //async function main(){
 //  let exchangeId = 'hitbtc2'
@@ -109,14 +111,79 @@ const ccxt = require('ccxt')
 //}
 
 let {retryIfTimeout} = require('./utils/index')
+let klines24H = require('../savedData/klines/klines24H.js')
+let _ = require('lodash')
+
 async function main() {
-  let exchange = new ccxt.binance()
-//  let promise = exchange.loadMarkets()
-  let promise = new Promise((resolve, reject) => {
-    throw new ccxt.RequestTimeout('Time out!')
-  })
-  let result = await retryIfTimeout(promise)
-  console.log('result', result)
+  let exchangeId = 'binance'
+  let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials[exchangeId]))
+  await exchange.loadMarkets()
+//  let symbols = klines24H.map(kline => kline.symbol)
+  let symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
+
+  setInterval(async () => {
+    let fetchStart = new Date().getTime()
+    let result = await klineListGetDuringPeriod(exchangeId, symbols, 288)
+    console.log(`it takes ${(new Date().getTime() - fetchStart)/1000}s to fetch from dynamoDB`)
+    console.log('result.length', result.length)
+  }, 2000)
+
+//  console.log('result', JSON.stringify(result))
+
+//  while (true) {
+////    api.sleep(1000)
+//    let ohlcv = await exchange.fetchOHLCV('ADA/BTC', '5m')
+//    console.log(`time ${ohlcv.slice(-1)[0][0]}, close ${ohlcv.slice(-1)[0][4]}, now ${new Date().getTime()}, time > now ${ohlcv.slice(-1)[0][0] + 5 * 60 * 1000 > new Date().getTime()}`)
+//  }
+
+
+//  console.log(exchange)
+
+//  let result = await exchange.createLimitBuyOrder('ETH/BTC', 0.02, 0.05, {'recvWindow': 60*10*1000})
+//  console.log('result', result)
+
+//  let createSellOrderResult = await retryExTaskIfTimeout(exchange, 'createLimitSellOrder', ['ETH/BTC', 0.006, 0.087310 * 1.3, {'recvWindow': 60*10*1000}])
+//  let fetchOrderResult = await exchange.fetchOpenOrders('ETH/BTC')
+
+//  let fetchOrderResult = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', ['ETH/BTC'])
+//
+//  console.log('fetchOrderResult.length', fetchOrderResult.length)
+//  console.log('fetchOrderResult', fetchOrderResult)
+//  let orderIds = fetchOrderResult.map(obj => obj.id)
+//  console.log('orderIds', orderIds)
+//
+//  let cancelPromiseList = orderIds.map(orderId => retryExTaskIfTimeout(exchange, 'cancelOrder', [orderId, 'ETH/BTC', {'recvWindow': 60*10*1000}]))
+//
+//  let results = await Promise.all(cancelPromiseList)
+//  console.log('results', results)
+
+//  exchange.createLimitBuyOrder('ETH/BTC', amount, price[, params])
+
+
+
+//  createLimitBuyOrder
+//  fetchOrders
+//  cancelOrder
+
+
+
+  //
+//  let result = await exchange.createMarketBuyOrder('ETH/BTC', 0.001, {'recvWindow': 60*10*1000})
+////  let result = await exchange.createMarketSellOrder('ETH/BTC', 0.001, {'recvWindow': 60*10*1000})
+////  let result = await exchange.fetchL2OrderBook('ETH/BTC')
+//  console.log('result', result)
+////  , [symbol, targetBalance]
+
+////  let promise = exchange.loadMarkets()
+//  let promiseFunc = (...args) => new Promise((resolve, reject) => {
+//    if (Math.random() > 0.5) {
+//      throw new ccxt.RequestTimeout('Time out!')
+//    } else {
+//      resolve(`Better ${args.join(' ')}`)
+//    }
+//  })
+//  let result = await retryIfTimeout(promiseFunc, ['way', 'to', 'handle', 'timeout'])
+//  console.log('result', result)
 //  let exchange = new ccxt.binance()
 //  await exchange.loadMarkets()
 //  let result = exchange.currencies

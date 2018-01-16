@@ -57,6 +57,7 @@ let klineIndex = process.env.PRODUCTION ? 0 : lineLength - 1 // 在生产环境�
  * */
 let whiteList = []
 let useVolumeToChooseCurrency = true
+let tempBuy = '' // used for debugging, 比如设置成 ETH/BTC，production就会马上买入BTC
 //let whiteList = [
 //  'DLT/BTC',
 //  'FUEL/BTC'
@@ -137,7 +138,8 @@ function rateAndSort(extractedInfoList, whiteList) {
     const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
     let matchBuyingCriteria = checkBuyingCriteria(extractedInfo)
     let isNewKline = ((new Date().getTime() - extractedInfo.timeLine.slice(-1)[0]) < 45 * 1000) //todo 改成30
-    if (matchBuyingCriteria) {
+    if (matchBuyingCriteria || extractedInfo.symbol===tempBuy) {
+      tempBuy = ''
       let rate = rateCurrency(klines, volumeLine)
       buyingPool.push({...extractedInfo, rate})
     }
@@ -311,6 +313,7 @@ async function useKlineStrategy(params){
         let fetchOrderResult = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', [symbol])
 
         let orderIds = fetchOrderResult.map(obj => obj.id)
+        orderIds = _.filter(orderIds, id => lastPickedTrade.orderIds.indexOf(id) > -1)
 
         let cancelPromiseList = orderIds.map(orderId => retryExTaskIfTimeout(exchange, 'cancelOrder', [orderId, symbol, {'recvWindow': 60*10*1000}]))
 
@@ -386,7 +389,6 @@ async function useKlineStrategy(params){
         }
 
         let boughtAmount = Number(buyResult.info.executedQty)
-        //        todo get order Id and clientOrderId
 
         try {
           let BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
@@ -435,18 +437,24 @@ async function useKlineStrategy(params){
           return retryExTaskIfTimeout(exchange, 'createLimitSellOrder', [symbol, cutAmount, orderBook.asks[0][0] * (100+cutProfit.value)/100, {'recvWindow': 60*10*1000}])
         })
 
-        try {
-          let createLimitOrdersResult = await Promise.all(createLimitOrderPromises)
-          let orderIds = []
-          for (let limitOrderResult of createLimitOrdersResult) {
-            console.log('limitOrderResult', limitOrderResult)
+        /**
+         * 创建limit orders
+         * */
+        let orderIds = []
+        await Promise.all(createLimitOrderPromises.map(async createOrderPromise => {
+          try {
+            let limitOrderResult = await createOrderPromise
+            if (limitOrderResult && limitOrderResult.id) {
+              orderIds.push(limitOrderResult.id)
+            }
           }
-          //        console.log('createLimitOrdersResult', createLimitOrdersResult)
-        }
-        catch (error) {
-          console.log(error)
-          log(`createLimitOrdersResult error, ignored`.red)
-        }
+          catch (error) {
+            console.log(error)
+            log(`createLimitOrdersResult error, often because of not enough balance, ignored`.red)
+          }
+        }))
+        console.log('orderIds', orderIds)
+        lastPickedTrade.orderIds = orderIds
 
         let newBTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
         let spentBTC = BTCAmount - newBTCAmount

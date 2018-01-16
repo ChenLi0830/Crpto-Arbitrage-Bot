@@ -639,18 +639,17 @@ async function timeWalk(extractedInfoList){
         let padding = 100
         let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoint + padding)
         klineIndex = extractedInfoList[0].timeLine.length - 1
-        console.log('klineIndex', klineIndex)
         /**
          * Determine memory leak
          * */
-        try {
-          global.gc();
-        } catch (e) {
-          console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
-          process.exit();
-        }
-        var heapUsed = process.memoryUsage().heapUsed;
-        console.log("Program is using " + heapUsed + " bytes of Heap.")
+//        try {
+//          global.gc();
+//        } catch (e) {
+//          console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
+//          process.exit();
+//        }
+//        var heapUsed = process.memoryUsage().heapUsed;
+//        console.log("Program is using " + heapUsed + " bytes of Heap.")
 
         /**
          * Skip if extractedInfoList hasn't changed
@@ -664,42 +663,25 @@ async function timeWalk(extractedInfoList){
           prevExtractedInfoList = extractedInfoList
         }
 
-//        /**
-//         * 给 newExtractedInfoList 添加 vibrateValue 和 BTCVolume
-//         * */
-//        extractedInfoList = addVibrateValue(extractedInfoList, observeWindow)
-//        extractedInfoList = addBTCVolValue(extractedInfoList, observeWindow)
+        let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint, 5000)
+        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-//        /**
-//         * 用Vibrate和Volume获得对应的whiteList -> vibrateWhiteList,
-//         * */
-//        let topVibrated = getTopVibrated(newExtractedInfoList, topVibratedNo, observeWindow)
-//        vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
-//        log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
-//
-//        let topVolume = getTopVolume(newExtractedInfoList, topVolumeNo, observeWindow)
-//        volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
-//        log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
+        topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 6, 5000 / 6)
+        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-//        let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint, 5000)
-//        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-//
-//        topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 6, 5000 / 6)
-//        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-//
-//        topVolume = getTopVolume(extractedInfoList, 10, numberOfPoint / 24)
-////        console.log('topVolume', topVolume)
-////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-//        log(`Top volume 1H: ${topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' ')}`.blue)
+        topVolume = getTopVolume(extractedInfoList, 10, numberOfPoint / 24)
+//        console.log('topVolume', topVolume)
+//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+        log(`Top volume 1H: ${topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' ')}`.green)
 
         let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
         log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
 
         let timeEpoch = Number(extractedInfoList[0].timeLine[klineIndex])
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
-        log(`${currentTime}: ->`.green)
+        log(`${moment().format('MMMM Do YYYY, h:mm:ss a')}, Data time: ${currentTime} ->`.green)
 
         log(`---------- Using Kline Strategy ---------- `.green)
         let klineResult = await useKlineStrategy({newExtractedInfoList: extractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList})

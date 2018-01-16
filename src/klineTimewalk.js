@@ -89,19 +89,8 @@ function checkBuyingCriteria(extractedInfo) {
   const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
   let matchVolCriteria = checkVolCriteria(volumeLine)
   let isPricesHigherThanPrevPoint = (closeLine[klineIndex] > closeLine[klineIndex-1]) && (openLine[klineIndex] > openLine[klineIndex-1])
-//  let isVibrateEnough = extractedInfo.vibrateValue > 50
-  //  if (isPricesHigherThanPrevPoint) {
-  //    log(closeLine[klineIndex], closeLine[klineIndex-1], openLine[klineIndex], openLine[klineIndex-1])
-  //  }
-  //  let isFastKlineIncreaseFast = (klines[windows[0]][klineIndex] / klines[windows[0]][klineIndex-1]) > 1.1
-
   let nowValueMatchCriteria = checkValueCriteria(klines, closeLine, openLine)
-  //  let prevValueMatchCriteria = checkValueCriteria(klines, prevPoint)
-
-  //  log(`nowMatchCriteria`, nowMatchCriteria)
-  //  log(`prevMatchCriteria`, prevMatchCriteria)
-
-  return nowValueMatchCriteria && matchVolCriteria && isPricesHigherThanPrevPoint /*&& isVibrateEnough*/ /*&& !prevValueMatchCriteria*/  //&& isFastKlineIncreaseFast
+  return nowValueMatchCriteria && matchVolCriteria && isPricesHigherThanPrevPoint
 }
 
 function rateCurrency(klines, volumeLine) {
@@ -375,10 +364,10 @@ async function useKlineStrategy(params){
         log('last 4 close prices', pickedTrade.closeLine.slice(-4).join(', '))
         log('last 4 close timeLine', pickedTrade.timeLine.slice(-4).join(', '))
         log('last 4 close volumeLine', pickedTrade.volumeLine.slice(-4).join(', '))
-        log('last 4 close MA4', lastTradeCurrentState.klines[windows[0]].slice(-4).join(', '))
-        log('last 4 close MA16', lastTradeCurrentState.klines[windows[1]].slice(-4).join(', '))
+        log('last 4 close MA4', pickedTrade.klines[windows[0]].slice(-4).join(', '))
+        log('last 4 close MA16', pickedTrade.klines[windows[1]].slice(-4).join(', '))
         log('klineIndex', klineIndex)
-        log('lastTradeCurrentState.closeLine.length', lastTradeCurrentState.closeLine.length)
+        log('lastTradeCurrentState.closeLine.length', pickedTrade.closeLine.length)
 
         player.play('./src/Glass.aiff', (err) => {
           if (err) throw err

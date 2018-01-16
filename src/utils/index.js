@@ -251,9 +251,12 @@ function generateCutProfitList(extractedInfo, observeWindow) {
   let highLine = extractedInfo.highLine.slice(-observeWindow)
   let lowLine = extractedInfo.lowLine.slice(-observeWindow)
   let openLine = extractedInfo.openLine.slice(-observeWindow)
+  let closeLine = extractedInfo.closeLine.slice(-observeWindow)
+  let accumulatedProfit = 0
 
   for (let i=0; i<openLine.length; i++) {
     totalChange += (100 * (highLine[i] - lowLine[i])/openLine[i])
+    accumulatedProfit += (100 * (closeLine[i] - openLine[i])/openLine[i])
   }
   let avgChange = totalChange / observeWindow
 

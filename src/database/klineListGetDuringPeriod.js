@@ -76,7 +76,6 @@ function extractOHLCVInfo(klineList, symbol) {
     lowLine,
     timeLine,
   }
-
 }
 
 function formatKlineList(klineListOfSymbols, symbols, numberOfPoints) {
@@ -84,7 +83,7 @@ function formatKlineList(klineListOfSymbols, symbols, numberOfPoints) {
   klineListOfSymbols.forEach((klineList, i)=>{
     let symbol = symbols[i]
     if (klineList.length < numberOfPoints - 1){
-      console.log(`symbol ${symbol} doesn't have that much history data, skipping it (klineList.length=${klineList.length} < numberOfPoints=${numberOfPoints})`)
+//      console.log(`symbol ${symbol} doesn't have that much history data, skipping it`)
     }
     else {
       let extractedInfo = extractOHLCVInfo(klineList, symbol)

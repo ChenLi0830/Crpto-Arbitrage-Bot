@@ -643,10 +643,22 @@ async function timeWalk(extractedInfoList){
         /**
          * Read data and get currentTime
          * */
-        let numberOfPoint = 24 * 60 / 5
+        let numberOfPoints = 24 * 60 / 5
         let padding = 100
-        let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoint + padding)
+        let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
+        /**
+         * 有时extractedInfoList会多fetch一个点，当多fetch一个点时，从左边去掉一个点
+         * */
+        if (extractedInfoList[0].timeLine.length > numberOfPoints) {
+          let start = extractedInfoList[0].timeLine.length - numberOfPoints
+          extractedInfoList = cutExtractedInfoList(extractedInfoList, start, numberOfPoints)
+        }
+
         klineIndex = extractedInfoList[0].timeLine.length - 1
+        if (klineIndex !== numberOfPoints - 1) {
+          throw new Error(`klineIndex!==${numberOfPoints - 1}`)
+        }
+
         /**
          * Determine memory leak
          * */
@@ -676,18 +688,18 @@ async function timeWalk(extractedInfoList){
         log(`${moment().format('MMMM Do YYYY, h:mm:ss a')}, Data time: ${currentTime} ->`.green)
 
         if (useVolumeToChooseCurrency) {
-          let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint, 5000)
+          let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints, 5000)
           volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
           //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 6, 5000 / 6)
+          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints / 6, 5000 / 6)
           volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
           //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
           let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
           log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
 
-          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 24, 5000 / 24)
+          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints / 24, 5000 / 24)
           //        console.log('topVolume', topVolume)
           //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
           log(`Top volume 1H: `.yellow + topVolume.map(o => {

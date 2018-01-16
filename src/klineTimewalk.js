@@ -321,7 +321,7 @@ async function useKlineStrategy(params){
          * */
 
         let targetBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free'][targetCurrency]
-        log(`--- ${targetCurrency} balance ${targetBalance}`.green)
+        log(`--- ${targetCurrency} balance ${targetBalance}, sell amount ${lastPickedTrade.boughtAmount}`.green)
 
         log(`--- Start Selling`.blue)
 
@@ -329,8 +329,8 @@ async function useKlineStrategy(params){
           if (err) throw err
         })
 
-        let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, targetBalance, {'recvWindow': 60*10*1000}])
-        //        let sellResult = await exchange.createMarketSellOrder(symbol, targetBalance)
+        let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, lastPickedTrade.boughtAmount, {'recvWindow': 60*10*1000}])
+        //        let sellResult = await exchange.createMarketSellOrder(symbol, lastPickedTrade.boughtAmount)
         log(`--- Selling Result`.blue, sellResult)
 
         let newBTCBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
@@ -671,6 +671,10 @@ async function timeWalk(extractedInfoList){
           prevExtractedInfoList = extractedInfoList
         }
 
+        let timeEpoch = Number(extractedInfoList[0].timeLine[klineIndex])
+        let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
+        log(`${moment().format('MMMM Do YYYY, h:mm:ss a')}, Data time: ${currentTime} ->`.green)
+
         if (useVolumeToChooseCurrency) {
           let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint, 5000)
           volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
@@ -680,18 +684,16 @@ async function timeWalk(extractedInfoList){
           volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
           //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-          topVolume = getTopVolume(extractedInfoList, 10, numberOfPoint / 24)
-          //        console.log('topVolume', topVolume)
-          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-          log(`Top volume 1H: `.yellow + topVolume.map(o => `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green).join(' ') + '\n')
-
           let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
           log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
-        }
 
-        let timeEpoch = Number(extractedInfoList[0].timeLine[klineIndex])
-        let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
-        log(`${moment().format('MMMM Do YYYY, h:mm:ss a')}, Data time: ${currentTime} ->`.green)
+          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 24, 5000 / 24)
+          //        console.log('topVolume', topVolume)
+          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+          log(`Top volume 1H: `.yellow + topVolume.map(o => {
+            return whiteListSet.has(o.symbol) ? '' : (` ${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green)
+          }).join(''))
+        }
 
         log(`---------- Using Kline Strategy ---------- `.green)
         let klineResult = await useKlineStrategy({newExtractedInfoList: extractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList})

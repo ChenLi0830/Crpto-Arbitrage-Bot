@@ -36,8 +36,8 @@ let {
 /**
  * 测试用，lineLength是用来获得24小时vol时用的
  * */
-//lineLength = 1 * 24 * 60 / 5//
-//KLINE_FILE = `./savedData/klines/klines-simulate-30-2.js`
+lineLength = 1 * 24 * 60 / 5//
+KLINE_FILE = `./savedData/klines/klines-simulate-1-4.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
@@ -71,21 +71,11 @@ function checkValueCriteria(klines, closeLine, openLine) {
   let isFastKlineLarger = (klines[windows[0]][klineIndex] > klines[windows[1]][klineIndex]) && (klines[windows[0]][klineIndex] > klines[windows[2]][klineIndex])
   let isMiddleKlineLarger = klines[windows[1]][klineIndex] > klines[windows[2]][klineIndex]
   let priceGreaterThanFastKline = closeLine[klineIndex] > klines[windows[0]][klineIndex]
-//  let priceOpenLessThanFastKline = openLine[klineIndex] < klines[windows[0]][klineIndex]
-//  let fastKlinePassMiddleKline = klines[windows[0]][klineIndex-1] < klines[windows[1]][klineIndex-1] && klines[windows[0]][klineIndex] > klines[windows[1]][klineIndex]
+  let isFastKlineIncreasing = klines[windows[0]][klineIndex] > klines[windows[0]][klineIndex-1]
+  let isMiddleKlineIncreasing = klines[windows[1]][klineIndex] > klines[windows[1]][klineIndex-1]
+  let isSlowKlineIncreasing = klines[windows[2]][klineIndex] > klines[windows[2]][klineIndex-1]
 
-  //  let accumatedIncrease = 0
-  //  let accumulatedInterval = 0
-  //  for (let i=klineIndex-1; i>0; i--) {
-  //    if (klines[windows[0]][i-1] > klines[windows[0]][i]) {
-  //      accumatedIncrease = (klines[windows[0]][klineIndex] - klines[windows[0]][i-1]) / klines[windows[0]][i-1]
-  //      accumulatedInterval = klineIndex - i
-  //      break
-  //    }
-  //  }
-  //  let previousIncreaseNotTooBig = accumatedIncrease < 0.2 || accumulatedInterval < 5
-
-  return isFastKlineLarger && isMiddleKlineLarger && priceGreaterThanFastKline /*&& priceOpenLessThanFastKline*/ /*&& previousIncreaseNotTooBig*/
+  return isFastKlineLarger && isMiddleKlineLarger && priceGreaterThanFastKline && isFastKlineIncreasing && isMiddleKlineIncreasing && isSlowKlineIncreasing
 }
 
 function checkVolCriteria(volumeLine){
@@ -137,9 +127,9 @@ function rateAndSort(extractedInfoList, whiteList) {
     /**
      * 白名单过滤
      * */
-    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
-//    whiteList = [...whiteListSet]
-    whiteList = [...whiteListSet].slice(0, topVolumeNo)
+    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
+    whiteList = [...whiteListSet]
+//    whiteList = [...whiteListSet].slice(0, topVolumeNo)
 
     if (whiteList && whiteList.length > 0) {
       if (!whiteList.includes(extractedInfo.symbol)) {
@@ -158,11 +148,23 @@ function rateAndSort(extractedInfoList, whiteList) {
 
     const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
     let matchBuyingCriteria = checkBuyingCriteria(extractedInfo)
-
+    let isNewKline = ((new Date().getTime() - extractedInfo.timeLine.slice(-1)[0]) < 45 * 1000) //todo 改成30
     if (matchBuyingCriteria) {
       let rate = rateCurrency(klines, volumeLine)
-
       buyingPool.push({...extractedInfo, rate})
+    }
+    /*
+    * 如果是刚刚生成的k线，判断它之前的k线是否满足条件，如果是则买入
+    * */
+    else if (isNewKline) {
+      let prevExtractedInfo = cutExtractedInfoList([extractedInfo], 0, extractedInfo.timeLine.length-1)[0]
+      let prevPointMatchBuyingCriteria = checkBuyingCriteria(prevExtractedInfo)
+
+      if (prevPointMatchBuyingCriteria) {
+        const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = prevExtractedInfo
+        let rate = rateCurrency(klines, volumeLine)
+        buyingPool.push({...extractedInfo, rate})
+      }
     }
   }
 
@@ -242,11 +244,16 @@ async function useKlineStrategy(params){
     ? _.find(newExtractedInfoList, {symbol: lastPickedTrade.symbol})
     : null
 
+  if (lastTradeCurrentState) {
+    log(`The most recent price of ${lastTradeCurrentState.symbol} is ${lastTradeCurrentState.closeLine.slice(-1)[0]}`.yellow)
+  }
+
   /** get conditions */
   let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState) : 0
   //  let lostTooMuch = potentialProfit < -0.03
 
   let dropThroughKline = false
+  let fastMADropThroughMiddleMA = false
   /*
   * 如果是在当前kline买入，需要等kline结束才判断是否dropThroughKline
   * */
@@ -256,6 +263,7 @@ async function useKlineStrategy(params){
      * */
     let sellKline = process.env.PRODUCTION ? klineIndex-1 : klineIndex
     dropThroughKline = lastTradeCurrentState.closeLine[sellKline] < lastTradeCurrentState.klines[windows[0]][sellKline]
+    fastMADropThroughMiddleMA = lastTradeCurrentState.klines[windows[0]][sellKline] < lastTradeCurrentState.klines[windows[1]][sellKline]
   }
 
   //  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[klineIndex] - lastTradeCurrentState.closeLine[klineIndex-1])/lastTradeCurrentState.closeLine[klineIndex] : 0
@@ -280,8 +288,8 @@ async function useKlineStrategy(params){
   let newPlotDot = null
 
   /** make changes */
-  if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline /*lostTooMuch || bigChangeInPrice || noLongerGoodTrade*/ ) {
-    log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline}`.yellow)
+  if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline || fastMADropThroughMiddleMA ) {
+    log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline} fastMADropThroughMiddleMA ${fastMADropThroughMiddleMA}`.yellow)
 
     if (PRODUCTION) {
       newPlotDot = {
@@ -293,7 +301,7 @@ async function useKlineStrategy(params){
         klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][klineIndex] / lastPickedTrade.klines[windows[0]][klineIndex-1] : 'n/a',
       }
 
-      if (earnedEnough || dropThroughKline) {
+      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA ) {
         /*
         * 卖币
         * */
@@ -302,7 +310,10 @@ async function useKlineStrategy(params){
         log('last 4 close prices', lastTradeCurrentState.closeLine.slice(-4).join(', '))
         log('last 4 close timeLine', lastTradeCurrentState.timeLine.slice(-4).join(', '))
         log('last 4 close volumeLine', lastTradeCurrentState.volumeLine.slice(-4).join(', '))
-
+        log('last 4 close MA4', lastTradeCurrentState.klines[windows[0]].slice(-4).join(', '))
+        log('last 4 close MA16', lastTradeCurrentState.klines[windows[1]].slice(-4).join(', '))
+        log('klineIndex', klineIndex)
+        log('lastTradeCurrentState.closeLine.length', lastTradeCurrentState.closeLine.length)
         let symbol = lastPickedTrade.symbol
         let targetCurrency = symbol.split('/')[0]
 
@@ -364,6 +375,10 @@ async function useKlineStrategy(params){
         log('last 4 close prices', pickedTrade.closeLine.slice(-4).join(', '))
         log('last 4 close timeLine', pickedTrade.timeLine.slice(-4).join(', '))
         log('last 4 close volumeLine', pickedTrade.volumeLine.slice(-4).join(', '))
+        log('last 4 close MA4', lastTradeCurrentState.klines[windows[0]].slice(-4).join(', '))
+        log('last 4 close MA16', lastTradeCurrentState.klines[windows[1]].slice(-4).join(', '))
+        log('klineIndex', klineIndex)
+        log('lastTradeCurrentState.closeLine.length', lastTradeCurrentState.closeLine.length)
 
         player.play('./src/Glass.aiff', (err) => {
           if (err) throw err
@@ -478,7 +493,7 @@ async function useKlineStrategy(params){
       //      lastPickedTrade = null
       //    }
       // buy in this symbol
-      if (earnedEnough || dropThroughKline) {
+      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA) {
         log(`Sell ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
         newPlotDot.sellPrice = lastTradeCurrentState.closeLine[klineIndex]
@@ -572,10 +587,12 @@ async function timeWalk(extractedInfoList){
     volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
     log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-    topVolume = getTopVolume(newExtractedInfoList, undefined, 4 * 60 / 5, 5000 / 6)
+    topVolume = getTopVolume(newExtractedInfoList, undefined, 1 * 60 / 5, 5000 / 24)
     volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
     log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
+    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
+    console.log('whiteListSet', whiteListSet)
     /** useKlineStrategy */
     let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})
     lastPickedTrade = klineResult.lastPickedTrade
@@ -630,21 +647,21 @@ async function timeWalk(extractedInfoList){
          * Read data and get currentTime
          * */
         let numberOfPoint = 24 * 60 / 5
-        let padding = 3
+        let padding = 100
         let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoint + padding)
-        klineIndex = extractedInfoList[0].length - 1
-
+        klineIndex = extractedInfoList[0].timeLine.length - 1
+        console.log('klineIndex', klineIndex)
         /**
          * Determine memory leak
          * */
-//        try {
-//          global.gc();
-//        } catch (e) {
-//          console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
-//          process.exit();
-//        }
-//        var heapUsed = process.memoryUsage().heapUsed;
-//        console.log("Program is using " + heapUsed + " bytes of Heap.")
+        try {
+          global.gc();
+        } catch (e) {
+          console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
+          process.exit();
+        }
+        var heapUsed = process.memoryUsage().heapUsed;
+        console.log("Program is using " + heapUsed + " bytes of Heap.")
 
         /**
          * Skip if extractedInfoList hasn't changed
@@ -675,23 +692,23 @@ async function timeWalk(extractedInfoList){
 //        volumeWhiteList = (topVolume).map(o => `${o.symbol}`)
 //        log(topVolume.map(o => `${o.symbol}: ${o.totalVolume}`).join(' '))
 
-        let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint, 5000)
-        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-        topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 6, 5000 / 6)
-        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-        topVolume = getTopVolume(extractedInfoList, 10, numberOfPoint / 24)
-//        console.log('topVolume', topVolume)
-//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-        log(`Top volume 1H: ${topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' ')}`.blue)
+//        let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint, 5000)
+//        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+//
+//        topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 6, 5000 / 6)
+//        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+//
+//        topVolume = getTopVolume(extractedInfoList, 10, numberOfPoint / 24)
+////        console.log('topVolume', topVolume)
+////        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+//        log(`Top volume 1H: ${topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' ')}`.blue)
 
         let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
         log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
 
-        let timeEpoch = extractedInfoList[0].timeLine[lineLength-1]
+        let timeEpoch = Number(extractedInfoList[0].timeLine[klineIndex])
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
         log(`${currentTime}: ->`.green)
 

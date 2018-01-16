@@ -699,12 +699,14 @@ async function timeWalk(extractedInfoList){
           let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
           log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
 
-          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints / 24, 5000 / 24)
-          //        console.log('topVolume', topVolume)
-          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-          log(`Top volume 1H: `.yellow + topVolume.map(o => {
-            return whiteListSet.has(o.symbol) ? '' : (` ${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green)
-          }).join(''))
+          /*
+          * 显示1小时内，除了已经在whiteList里，vol最高的前10
+          * */
+          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints / 24)
+          topVolume = _.filter(topVolume, o => !whiteListSet.has(o.symbol)).slice(0,10)
+          log(`Top volume 1H: `.yellow + topVolume.map(o => (
+            `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green
+            )).join(' '))
         }
 
         log(`---------- Using Kline Strategy ---------- `.green)

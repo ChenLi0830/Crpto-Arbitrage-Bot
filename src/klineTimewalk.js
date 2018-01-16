@@ -37,7 +37,7 @@ let {
  * 测试用，lineLength是用来获得24小时vol时用的
  * */
 lineLength = 1 * 24 * 60 / 5//
-KLINE_FILE = `./savedData/klines/klines-simulate-1-4.js`
+KLINE_FILE = `./savedData/klines/klines-simulate-7-usdt.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
@@ -52,12 +52,11 @@ let topWeightNo = 10
 let observeWindow = 300
 let klineIndex = process.env.PRODUCTION ? 0 : lineLength - 1 // 在生产环境中看上一个kline的index
 
-let whiteList = []
-
 /**
- * 高持续度增长
- * 有阶跃
+ * 设置白名单
  * */
+let whiteList = []
+let useVolumeToChooseCurrency = true
 //let whiteList = [
 //  'DLT/BTC',
 //  'FUEL/BTC'
@@ -421,12 +420,14 @@ async function useKlineStrategy(params){
         }
 
         lastPickedTrade = pickedTrade
+        lastPickedTrade.boughtAmount = boughtAmount
 
         /**
          * 设置止赢
          * */
 
         console.log('orderBook.asks[0]', orderBook.asks[0])
+        console.log('lastPickedTrade.boughtAmount', lastPickedTrade.boughtAmount)
         cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5)
 
         let createLimitOrderPromises = cutProfitList.map(cutProfit => {
@@ -436,6 +437,10 @@ async function useKlineStrategy(params){
 
         try {
           let createLimitOrdersResult = await Promise.all(createLimitOrderPromises)
+          let orderIds = []
+          for (let limitOrderResult of createLimitOrdersResult) {
+            console.log('limitOrderResult', limitOrderResult)
+          }
           //        console.log('createLimitOrdersResult', createLimitOrdersResult)
         }
         catch (error) {
@@ -572,16 +577,19 @@ async function timeWalk(extractedInfoList){
     /**
      * 用Volume获得对应的whiteList -> volumeWhiteList,
      * */
-    let topVolume = getTopVolume(newExtractedInfoList, undefined, 24 * 60 / 5, 5000)
-    volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-    log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+    if (useVolumeToChooseCurrency) {
+      let topVolume = getTopVolume(newExtractedInfoList, undefined, 24 * 60 / 5, 5000)
+      volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+      log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-    topVolume = getTopVolume(newExtractedInfoList, undefined, 1 * 60 / 5, 5000 / 24)
-    volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-    log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+      topVolume = getTopVolume(newExtractedInfoList, undefined, 1 * 60 / 5, 5000 / 24)
+      volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+      log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
-    console.log('whiteListSet', whiteListSet)
+      let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
+      console.log('whiteListSet', whiteListSet)
+    }
+
     /** useKlineStrategy */
     let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})
     lastPickedTrade = klineResult.lastPickedTrade
@@ -663,21 +671,23 @@ async function timeWalk(extractedInfoList){
           prevExtractedInfoList = extractedInfoList
         }
 
-        let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint, 5000)
-        volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+        if (useVolumeToChooseCurrency) {
+          let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint, 5000)
+          volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-        topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 6, 5000 / 6)
-        volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoint / 6, 5000 / 6)
+          volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-        topVolume = getTopVolume(extractedInfoList, 10, numberOfPoint / 24)
-//        console.log('topVolume', topVolume)
-//        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-        log(`Top volume 1H: ${topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' ')}`.green)
+          topVolume = getTopVolume(extractedInfoList, 10, numberOfPoint / 24)
+          //        console.log('topVolume', topVolume)
+          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+          log(`Top volume 1H: `.yellow + topVolume.map(o => `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green).join(' ') + '\n')
 
-        let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
-        log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
+          let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
+          log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
+        }
 
         let timeEpoch = Number(extractedInfoList[0].timeLine[klineIndex])
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')

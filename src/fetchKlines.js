@@ -20,8 +20,8 @@ let {
   lineLength,
   ohlcvIndex,
   KLINE_FILE,
-  blackList,
-  whiteList,
+  fetchKlineBlackList,
+  fetchKlineWhiteList,
   KLINE_24H_FILE,
 } = require('./config')
 
@@ -139,13 +139,13 @@ async function fetchPromiseBySegment(promises, segNumber) {
         exchange.symbols.forEach(symbol => {
           if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) {
 
-            if (blackList && blackList.length > 0 && blackList.includes(symbol)) {
-              log(`${symbol} is in blacklist, skipping it`.yellow)
+            if (fetchKlineBlackList && fetchKlineBlackList.length > 0 && fetchKlineBlackList.includes(symbol)) {
+              log(`${symbol} is in fetchKlineBlackList, skipping it`.yellow)
               return
             }
 
-            if (whiteList && whiteList.length > 0 && !whiteList.includes(symbol)) {
-              log(`${symbol} is not in whiteList, skipping it`.yellow)
+            if (fetchKlineWhiteList && fetchKlineWhiteList.length > 0 && !fetchKlineWhiteList.includes(symbol)) {
+              log(`${symbol} is not in fetchKlineWhiteList, skipping it`.yellow)
               return
             }
 
@@ -186,16 +186,17 @@ async function fetchPromiseBySegment(promises, segNumber) {
           //        await api.sleep (exchange.rateLimit)
           let symbolInvalid = false
 
+//          if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
           if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) { // skip darkpool symbols
             log(`processing ${symbol}`.green)
 
-            if (blackList && blackList.length > 0 && blackList.includes(symbol)) {
-              log(`${symbol} is in blacklist, skipping it`.yellow)
+            if (fetchKlineBlackList && fetchKlineBlackList.length > 0 && fetchKlineBlackList.includes(symbol)) {
+              log(`${symbol} is in fetchKlineBlackList, skipping it`.yellow)
               continue
             }
 
-            if (whiteList && whiteList.length > 0 && !whiteList.includes(symbol)) {
-              log(`${symbol} is not in whiteList, skipping it`.yellow)
+            if (fetchKlineWhiteList && fetchKlineWhiteList.length > 0 && !fetchKlineWhiteList.includes(symbol)) {
+              log(`${symbol} is not in fetchKlineWhiteList, skipping it`.yellow)
               continue
             }
 

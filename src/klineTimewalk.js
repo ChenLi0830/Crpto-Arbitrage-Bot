@@ -30,7 +30,8 @@ let {
   windows,
   KLINE_FILE,
   PLOT_CSV_FILE,
-  intervalInMillesec
+  intervalInMillesec,
+  whiteList,
 } = require('./config')
 
 /**
@@ -52,16 +53,8 @@ let topWeightNo = 10
 let observeWindow = 300
 let klineIndex = process.env.PRODUCTION ? 0 : lineLength - 1 // 在生产环境中看上一个kline的index
 
-/**
- * 设置白名单
- * */
-let whiteList = []
 let useVolumeToChooseCurrency = true
 let tempBuy = '' // used for debugging, 比如设置成 ETH/BTC，production就会马上买入BTC
-//let whiteList = [
-//  'DLT/BTC',
-//  'FUEL/BTC'
-//]
 
 let cutProfitList = []
 
@@ -690,16 +683,32 @@ async function timeWalk(extractedInfoList){
         }
 
         /**
+         * 用 while 读取白名单，并删除config记录
+         * */
+        try {
+          let cachedModule = require.cache[require.resolve('./config')]
+          if (cachedModule) {
+            delete require.cache[require.resolve('./config')].parent.children//Clear require cache
+            delete require.cache[require.resolve('./config')]
+          }
+
+          await api.sleep(100)
+          whiteList = require('./config').whiteList
+        }
+        catch (error) {
+          console.log(error)
+        }
+        /**
          * Determine memory leak
          * */
-//        try {
-//          global.gc();
-//        } catch (e) {
-//          console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
-//          process.exit();
-//        }
-//        var heapUsed = process.memoryUsage().heapUsed;
-//        console.log("Program is using " + heapUsed + " bytes of Heap.")
+        try {
+          global.gc();
+        } catch (e) {
+          console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
+          process.exit();
+        }
+        var heapUsed = process.memoryUsage().heapUsed;
+        console.log("Program is using " + heapUsed + " bytes of Heap.")
 
         /**
          * Skip if extractedInfoList hasn't changed

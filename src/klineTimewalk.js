@@ -68,8 +68,8 @@ let cutProfitList = []
 //-----------------------------------------------------------------------------
 
 function checkValueCriteria(klines, closeLine, openLine) {
-  let isFastKlineLarger = (klines[windows[0]][klineIndex] > klines[windows[1]][klineIndex]) && (klines[windows[0]][klineIndex] > klines[windows[2]][klineIndex])
-  let isMiddleKlineLarger = klines[windows[1]][klineIndex] > klines[windows[2]][klineIndex]
+  let isFastKlineLarger = (klines[windows[0]][klineIndex] >= klines[windows[1]][klineIndex]) && (klines[windows[0]][klineIndex] >= klines[windows[2]][klineIndex])
+  let isMiddleKlineLarger = klines[windows[1]][klineIndex] >= klines[windows[2]][klineIndex]
   let priceGreaterThanFastKline = closeLine[klineIndex] > klines[windows[0]][klineIndex]
   let isFastKlineIncreasing = klines[windows[0]][klineIndex] > klines[windows[0]][klineIndex-1]
   let isMiddleKlineIncreasing = klines[windows[1]][klineIndex] > klines[windows[1]][klineIndex-1]

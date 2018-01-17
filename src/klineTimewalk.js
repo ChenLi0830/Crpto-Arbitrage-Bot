@@ -32,6 +32,7 @@ let {
   PLOT_CSV_FILE,
   intervalInMillesec,
   whiteList,
+  dynamicProfitList,
 } = require('./config')
 
 /**
@@ -442,7 +443,7 @@ async function useKlineStrategy(params){
 
         console.log('orderBook.asks[0]', orderBook.asks[0])
         console.log('lastPickedTrade.boughtAmount', lastPickedTrade.boughtAmount)
-        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5)
+        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5, dynamicProfitList)
 
         let createLimitOrderPromises = cutProfitList.map(cutProfit => {
           let cutAmount = boughtAmount * cutProfit.percent / 100
@@ -694,6 +695,7 @@ async function timeWalk(extractedInfoList){
 
           await api.sleep(100)
           whiteList = require('./config').whiteList
+          dynamicProfitList = require('./config').dynamicProfitList
         }
         catch (error) {
           console.log(error)

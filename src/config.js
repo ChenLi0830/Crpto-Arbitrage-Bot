@@ -30,4 +30,22 @@ module.exports = {
 //    'ETH/BTC',
 //    'MANA/BTC'
 //  ],
+
+  /**
+   * 止盈点
+   * */
+  dynamicProfitList: [
+    {
+      multiplier: 3.5,
+      percent: 30,
+    },
+    {
+      multiplier: 4,
+      percent: 40,
+    },
+    {
+      multiplier: 5.5,
+      percent: 20,
+    },
+  ],
 }

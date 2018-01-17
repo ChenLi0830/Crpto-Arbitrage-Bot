@@ -246,7 +246,7 @@ function getTopVolume(extractedInfoList, topVolumeNo=undefined, observeWindow = 
   return sortedExtractedInfoList.slice(0, topVolumeNo)
 }
 
-function generateCutProfitList(extractedInfo, observeWindow) {
+function generateCutProfitList(extractedInfo, observeWindow, dynamicProfitList) {
   let totalChange = 0
   let highLine = extractedInfo.highLine.slice(-observeWindow)
   let lowLine = extractedInfo.lowLine.slice(-observeWindow)
@@ -260,20 +260,10 @@ function generateCutProfitList(extractedInfo, observeWindow) {
   }
   let avgChange = totalChange / observeWindow
 
-  return [
-    {
-      value: avgChange * 3.5,
-      percent: 30,
-    },
-    {
-      value: avgChange * 4,
-      percent: 40,
-    },
-    {
-      value: avgChange * 5.5,
-      percent: 20,
-    },
-  ]
+  return dynamicProfitList.map(dynamicProfit=>({
+    value: avgChange * dynamicProfit.multiplier,
+    percent: dynamicProfit.percent,
+  }))
 
 //    return [
 //    {

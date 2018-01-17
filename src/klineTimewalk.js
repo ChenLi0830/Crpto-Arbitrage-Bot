@@ -252,12 +252,8 @@ async function useKlineStrategy(params){
     volumeLessThanPrevPoint = (lastTradeCurrentState.volumeLine[sellKline] / lastTradeCurrentState.volumeLine[sellKline - 1]) < 0.5
   }
 
-  //  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[klineIndex] - lastTradeCurrentState.closeLine[klineIndex-1])/lastTradeCurrentState.closeLine[klineIndex] : 0
-  //  let bigChangeInPrice = recentPriceDiff < -0.03
-//  let earnedEnough = potentialProfit >= 0.50
   let targetValue = lastPickedTrade ? Math.sqrt(lastTradeCurrentState.meanSquareError) : 0
   let earnedEnough = false//lastPickedTrade ? (potentialProfit >= targetValue) : false
-//  let earnedEnough = lastPickedTrade ? true : false
 
 //  if (lastPickedTrade) {
 //    log(`targetValue ${targetValue}`.blue)
@@ -345,20 +341,26 @@ async function useKlineStrategy(params){
           if (err) throw err
         })
 
-        let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, sellAmount, {'recvWindow': 60*10*1000}])
-        //        let sellResult = await exchange.createMarketSellOrder(symbol, lastPickedTrade.boughtAmount)
-        log(`--- Selling Result`.blue, sellResult)
-
         let newBTCBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
-        //        let newBTCBalance = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
         log(`--- newBTCBalance ${newBTCBalance}`)
-
-        newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
-
-        let askPrice = (await retryExTaskIfTimeout(exchange, 'fetchL2OrderBook', [symbol])).asks[0]
-        //        let askPrice = (await exchange.fetchL2OrderBook(symbol)).asks[0]
-        newPlotDot.sellPrice = askPrice[0]
         newPlotDot.value = newBTCBalance
+
+        if (sellAmount < (lastPickedTrade.boughtAmount * 0.01)) {
+          /**
+           * 如果小于1%，则认为是已经被用户或止盈卖光了
+           * */
+          newPlotDot.event = `${lastPickedTrade.symbol} is sold by user or limitOrders`
+        }
+        else {
+          /**
+           * 否则卖币
+           * */
+          let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, sellAmount, {'recvWindow': 60*10*1000}])
+          log(`--- Selling Result`.blue, sellResult)
+          newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
+          let askPrice = (await retryExTaskIfTimeout(exchange, 'fetchL2OrderBook', [symbol])).asks[0]
+          newPlotDot.sellPrice = askPrice[0]
+        }
 
         lastPickedTrade = null
       }

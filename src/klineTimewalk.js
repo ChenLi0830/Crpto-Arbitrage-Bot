@@ -311,19 +311,16 @@ async function useKlineStrategy(params){
          * 取消当前open order
          * */
         let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', [symbol])
-        console.log('fetchedOrders', fetchedOrders)
-
         let orderIds = fetchedOrders.map(obj => obj.id)
 
         /*
         * 查看有多少limit order被filled了
         * */
-        console.log('fetchedOrders', fetchedOrders)
         let filledAmount = 0
         for (let limitOrder of lastPickedTrade.limitOrders) {
           let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
           console.log('currentOrderStatus', currentOrderStatus)
-          if (currentOrderStatus.status==='closed') {//全卖了
+          if (!currentOrderStatus || currentOrderStatus.status==='closed') {//全卖了
             filledAmount += limitOrder.amount
           }
           else if (currentOrderStatus.status==='open') {
@@ -467,7 +464,7 @@ async function useKlineStrategy(params){
             if (limitOrderResult && limitOrderResult.id) {
               limitOrders.push({
                 id: limitOrderResult.id,
-                amount: limitOrderResult.filled
+                amount: limitOrderResult.amount
               })
             }
           }

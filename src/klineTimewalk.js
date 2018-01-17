@@ -37,7 +37,7 @@ let {
  * 测试用，lineLength是用来获得24小时vol时用的
  * */
 lineLength = 1 * 24 * 60 / 5//
-KLINE_FILE = `./savedData/klines/klines-simulate-7-usdt.js`
+KLINE_FILE = `./savedData/klines/klines-simulate-7-4.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
@@ -244,6 +244,7 @@ async function useKlineStrategy(params){
 
   let dropThroughKline = false
   let fastMADropThroughMiddleMA = false
+  let volumeLessThanPrevPoint = false
   /*
   * 如果是在当前kline买入，需要等kline结束才判断是否dropThroughKline
   * */
@@ -254,6 +255,7 @@ async function useKlineStrategy(params){
     let sellKline = process.env.PRODUCTION ? klineIndex-1 : klineIndex
     dropThroughKline = lastTradeCurrentState.closeLine[sellKline] < lastTradeCurrentState.klines[windows[0]][sellKline]
     fastMADropThroughMiddleMA = lastTradeCurrentState.klines[windows[0]][sellKline] < lastTradeCurrentState.klines[windows[1]][sellKline]
+    volumeLessThanPrevPoint = (lastTradeCurrentState.volumeLine[sellKline] / lastTradeCurrentState.volumeLine[sellKline - 1]) < 0.5
   }
 
   //  let recentPriceDiff = lastPickedTrade ? (lastTradeCurrentState.closeLine[klineIndex] - lastTradeCurrentState.closeLine[klineIndex-1])/lastTradeCurrentState.closeLine[klineIndex] : 0
@@ -278,8 +280,8 @@ async function useKlineStrategy(params){
   let newPlotDot = null
 
   /** make changes */
-  if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline || fastMADropThroughMiddleMA ) {
-    log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline} fastMADropThroughMiddleMA ${fastMADropThroughMiddleMA}`.yellow)
+  if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint) {
+    log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline} fastMADropThroughMiddleMA ${fastMADropThroughMiddleMA} volumeLessThanPrevPoint ${volumeLessThanPrevPoint}`.yellow)
 
     if (PRODUCTION) {
       newPlotDot = {
@@ -291,7 +293,7 @@ async function useKlineStrategy(params){
         klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][klineIndex] / lastPickedTrade.klines[windows[0]][klineIndex-1] : 'n/a',
       }
 
-      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA ) {
+      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint) {
         /*
         * 卖币
         * */
@@ -515,7 +517,7 @@ async function useKlineStrategy(params){
       //      lastPickedTrade = null
       //    }
       // buy in this symbol
-      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA) {
+      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint) {
         log(`Sell ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
         newPlotDot.sellPrice = lastTradeCurrentState.closeLine[klineIndex]

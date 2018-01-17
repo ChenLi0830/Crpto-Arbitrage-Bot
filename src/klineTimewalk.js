@@ -310,10 +310,29 @@ async function useKlineStrategy(params){
         /**
          * 取消当前open order
          * */
-        let fetchOrderResult = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', [symbol])
+        let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', [symbol])
+        console.log('fetchedOrders', fetchedOrders)
 
-        let orderIds = fetchOrderResult.map(obj => obj.id)
-        orderIds = _.filter(orderIds, id => lastPickedTrade.orderIds.indexOf(id) > -1)
+        let orderIds = fetchedOrders.map(obj => obj.id)
+
+        /*
+        * 查看有多少limit order被filled了
+        * */
+        console.log('fetchedOrders', fetchedOrders)
+        let filledAmount = 0
+        for (let limitOrder of lastPickedTrade.limitOrders) {
+          let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
+          console.log('currentOrderStatus', currentOrderStatus)
+          if (currentOrderStatus.status==='closed') {//全卖了
+            filledAmount += limitOrder.amount
+          }
+          else if (currentOrderStatus.status==='open') {
+            filledAmount += Math.min(currentOrderStatus.filled, limitOrder.amount) // filled是safeFloat，可能跟实际值有出入
+          }
+        }
+        console.log('filledAmount', filledAmount)
+
+        orderIds = _.filter(orderIds, id => lastPickedTrade.limitOrders.map(order=>order.id).indexOf(id) > -1)
 
         let cancelPromiseList = orderIds.map(orderId => retryExTaskIfTimeout(exchange, 'cancelOrder', [orderId, symbol, {'recvWindow': 60*10*1000}]))
 
@@ -324,7 +343,8 @@ async function useKlineStrategy(params){
          * */
 
         let targetBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free'][targetCurrency]
-        log(`--- ${targetCurrency} balance ${targetBalance}, sell amount ${lastPickedTrade.boughtAmount}`.green)
+        let sellAmount = Math.min(targetBalance, (lastPickedTrade.boughtAmount - filledAmount))
+        log(`--- ${targetCurrency} balance ${targetBalance}, bought amount ${lastPickedTrade.boughtAmount}, sell amount ${sellAmount}`.green)
 
         log(`--- Start Selling`.blue)
 
@@ -332,7 +352,7 @@ async function useKlineStrategy(params){
           if (err) throw err
         })
 
-        let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, lastPickedTrade.boughtAmount, {'recvWindow': 60*10*1000}])
+        let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, sellAmount, {'recvWindow': 60*10*1000}])
         //        let sellResult = await exchange.createMarketSellOrder(symbol, lastPickedTrade.boughtAmount)
         log(`--- Selling Result`.blue, sellResult)
 
@@ -440,12 +460,15 @@ async function useKlineStrategy(params){
         /**
          * 创建limit orders
          * */
-        let orderIds = []
-        await Promise.all(createLimitOrderPromises.map(async createOrderPromise => {
+        let limitOrders = []
+        await Promise.all(createLimitOrderPromises.map(async (createOrderPromise, i) => {
           try {
             let limitOrderResult = await createOrderPromise
             if (limitOrderResult && limitOrderResult.id) {
-              orderIds.push(limitOrderResult.id)
+              limitOrders.push({
+                id: limitOrderResult.id,
+                amount: limitOrderResult.filled
+              })
             }
           }
           catch (error) {
@@ -453,8 +476,8 @@ async function useKlineStrategy(params){
             log(`createLimitOrdersResult error, often because of not enough balance, ignored`.red)
           }
         }))
-        console.log('orderIds', orderIds)
-        lastPickedTrade.orderIds = orderIds
+        console.log('limitOrders', limitOrders)
+        lastPickedTrade.limitOrders = limitOrders
 
         let newBTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
         let spentBTC = BTCAmount - newBTCAmount

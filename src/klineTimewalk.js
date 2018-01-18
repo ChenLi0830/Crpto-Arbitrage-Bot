@@ -195,9 +195,6 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
       while (cutProfitIndex < cutProfitList.length && lastTradeCurrentState.highLine[i] > (1 + cutProfitList[cutProfitIndex].value/100) * purchasePrice) {
         soldMoney += ((1 + cutProfitList[cutProfitIndex].value/100) * purchasePrice * cutProfitList[cutProfitIndex].percent)
         volPercent -= cutProfitList[cutProfitIndex].percent
-//        log(`lastTradeCurrentState.highLine[i] ${lastTradeCurrentState.highLine[i]}`.yellow)
-//        log(`(1 + cutProfitList[cutProfitIndex].value/100) * purchasePrice ${(1 + cutProfitList[cutProfitIndex].value/100) * purchasePrice}`.yellow)
-//        log('soldMoney', soldMoney)
         cutProfitIndex++
       }
     }
@@ -511,7 +508,8 @@ async function useKlineStrategy(params){
         lastPickedTrade.limitOrders = limitOrders
       }
 
-    } else {
+    }
+    else {
       /*
       * Time Walk Simulation
       * */

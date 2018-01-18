@@ -347,7 +347,7 @@ async function useKlineStrategy(params){
            * 如果小于所能卖出的最小值，则认为是已经被用户或止盈卖光了
            * */
           newPlotDot.event = `${lastPickedTrade.symbol} is sold by user or limitOrders`
-          log(`${lastPickedTrade.symbol} has already been sold by user or limit orders`.blue)
+          log(`${lastPickedTrade.symbol} has already been sold by user or limit orders`.yellow)
           let newBTCBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           log(`--- newBTCBalance ${newBTCBalance}`)
           newPlotDot.value = newBTCBalance

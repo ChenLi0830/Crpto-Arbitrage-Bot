@@ -13,7 +13,8 @@ const {MinorError, MajorError} = require('./utils/errors')
 const utils = require('./utils')
 const player = require('play-sound')(opts = {})
 const {
-  retryExTaskIfTimeout,
+  retryMutationTaskIfTimeout,
+  retryQueryTaskIfAnyError,
   cutExtractedInfoList,
   getTopVibrated,
   getTopVolume,
@@ -240,7 +241,7 @@ async function useKlineStrategy(params){
   let shouldLockProfit = false
   let priceDropThroughCost = lastTradeCurrentState ? lastTradeCurrentState.closeLine.slice(-1)[0] <= lastPickedTrade.buyPrice: false
   if (priceDropThroughCost) { // 判断止盈线是否被触发
-    let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOrders', [lastTradeCurrentState.symbol])
+    let fetchedOrders = await retryQueryTaskIfAnyError(exchange, 'fetchOrders', [lastTradeCurrentState.symbol])
     log(`Current price ${lastTradeCurrentState.closeLine.slice(-1)[0]} <= Purchase price ${lastPickedTrade.buyPrice}`.green)
     for (let limitOrder of lastPickedTrade.limitOrders) {
       let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
@@ -322,7 +323,7 @@ async function useKlineStrategy(params){
         /*
         * 查看limit order的filled amount
         * */
-        let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOrders', [symbol])
+        let fetchedOrders = await retryQueryTaskIfAnyError(exchange, 'fetchOrders', [symbol])
         let filledAmount = 0
         for (let limitOrder of lastPickedTrade.limitOrders) {
           let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
@@ -342,7 +343,7 @@ async function useKlineStrategy(params){
         fetchedOrders.forEach(obj => obj.status === 'open' && orderIds.push(obj.id))
         orderIds = _.filter(orderIds, id => lastPickedTrade.limitOrders.map(order=>order.id).indexOf(id) > -1)
 
-        let cancelPromiseList = orderIds.map(orderId => retryExTaskIfTimeout(exchange, 'cancelOrder', [orderId, symbol, {'recvWindow': 60*10*1000}]))
+        let cancelPromiseList = orderIds.map(orderId => retryMutationTaskIfTimeout(exchange, 'cancelOrder', [orderId, symbol, {'recvWindow': 60*10*1000}]))
 
         let results = await Promise.all(cancelPromiseList)
 
@@ -350,7 +351,7 @@ async function useKlineStrategy(params){
          * 开始卖
          * */
 
-        let targetBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free'][targetCurrency]
+        let targetBalance = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free'][targetCurrency]
         let sellAmount = Math.min(targetBalance, (lastPickedTrade.boughtAmount - filledAmount))
         log(`--- ${targetCurrency} balance ${targetBalance}, bought amount ${lastPickedTrade.boughtAmount}, sell amount ${sellAmount}`.green)
 
@@ -367,7 +368,7 @@ async function useKlineStrategy(params){
            * */
           newPlotDot.event = `${lastPickedTrade.symbol} is sold by user or limitOrders`
           log(`${lastPickedTrade.symbol} has already been sold by user or limit orders`.yellow)
-          let newBTCBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+          let newBTCBalance = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           log(`--- newBTCBalance ${newBTCBalance}`)
           newPlotDot.value = newBTCBalance
         }
@@ -375,13 +376,13 @@ async function useKlineStrategy(params){
           /**
            * 否则卖币
            * */
-          let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, sellAmount, {'recvWindow': 60*10*1000}])
+          let sellResult = await retryMutationTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, sellAmount, {'recvWindow': 60*10*1000}])
           log(`--- Selling Result`.blue, sellResult)
-          let newBTCBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+          let newBTCBalance = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           log(`--- newBTCBalance ${newBTCBalance}`)
           newPlotDot.value = newBTCBalance
           newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
-          let askPrice = (await retryExTaskIfTimeout(exchange, 'fetchL2OrderBook', [symbol])).asks[0]
+          let askPrice = (await retryQueryTaskIfAnyError(exchange, 'fetchL2OrderBook', [symbol])).asks[0]
           newPlotDot.sellPrice = askPrice[0]
         }
 
@@ -393,9 +394,9 @@ async function useKlineStrategy(params){
         * */
         let symbol = pickedTrade.symbol
 
-        let BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+        let BTCAmount = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
         //        let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
-        let orderBook = await retryExTaskIfTimeout(exchange, 'fetchL2OrderBook', [symbol])
+        let orderBook = await retryQueryTaskIfAnyError(exchange, 'fetchL2OrderBook', [symbol])
         //        let orderBook = await exchange.fetchL2OrderBook(symbol)
 
         let weightedBuyPrice = api.weightedPrice(orderBook.asks, BTCAmount).tradePrice
@@ -419,7 +420,7 @@ async function useKlineStrategy(params){
         let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
         let buyInAmount = maxAmount * 0.7 > 1 ? Math.trunc(maxAmount * 0.7) : maxAmount * 0.7
 
-        let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
+        let buyResult = await retryMutationTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
         //        let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
         console.log('buyResult', buyResult)
         if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -429,11 +430,11 @@ async function useKlineStrategy(params){
         let boughtAmount = Number(buyResult.info.executedQty)
 
         try {
-          let BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+          let BTCAmount = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           let maxAmount = BTCAmount * 0.999 / weightedBuyPrice
           let buyInAmount = maxAmount * 0.7 > 1 ? Math.trunc(maxAmount * 0.7) : maxAmount * 0.7
-          let buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
+          let buyResult = await retryMutationTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
           //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Second buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -442,11 +443,11 @@ async function useKlineStrategy(params){
 
           boughtAmount += Number(buyResult.info.executedQty)
 
-          BTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+          BTCAmount = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
           //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
           maxAmount = BTCAmount * 0.999 / weightedBuyPrice
           buyInAmount = maxAmount * 0.7 > 1 ? Math.trunc(maxAmount * 0.7) : maxAmount * 0.7
-          buyResult = await retryExTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
+          buyResult = await retryMutationTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
           //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
           log(`Third buy result`, buyResult)
           if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -462,7 +463,7 @@ async function useKlineStrategy(params){
         lastPickedTrade = pickedTrade
         lastPickedTrade.boughtAmount = boughtAmount
 
-        let newBTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+        let newBTCAmount = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
         let spentBTC = BTCAmount - newBTCAmount
         let buyPrice = (spentBTC / boughtAmount)
         log(`---    spent ${spentBTC} BTC -  ${Math.trunc(100 * spentBTC/BTCAmount)}% in purchase, average purchase price ${buyPrice}`)
@@ -482,7 +483,7 @@ async function useKlineStrategy(params){
 
         let createLimitOrderPromises = cutProfitList.map(cutProfit => {
           let cutAmount = boughtAmount * cutProfit.percent / 100
-          return retryExTaskIfTimeout(exchange, 'createLimitSellOrder', [symbol, cutAmount, orderBook.asks[0][0] * (100+cutProfit.value)/100, {'recvWindow': 60*10*1000}])
+          return retryMutationTaskIfTimeout(exchange, 'createLimitSellOrder', [symbol, cutAmount, orderBook.asks[0][0] * (100+cutProfit.value)/100, {'recvWindow': 60*10*1000}])
         })
 
         /**
@@ -686,7 +687,7 @@ async function timeWalk(extractedInfoList){
     log(`---        klineIndex ${klineIndex}`)
     log(`---        windows ${windows}`)
     log(`---------- Fetching Balance ----------`.green)
-    let money = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+    let money = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
     log(`---        BTC Balance - ${money}`.green)
     log(`---------- Fetching Balance ---------- \n`.green)
 

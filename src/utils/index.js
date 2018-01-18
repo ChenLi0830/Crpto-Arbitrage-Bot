@@ -56,9 +56,9 @@ async function simulate (result, delay) {
 }
 
 /**
- * 用来调用exchange的方法, 当timeout时，自动retry
+ * 用来调用exchange的写入类方法, 比如买币，卖币等等，当timeout时，自动retry
  * */
-async function retryExTaskIfTimeout (exchange, func, args=[]) {
+async function retryMutationTaskIfTimeout (exchange, func, args=[]) {
   return await promiseRetry(async (retry, number) => {
     try {
       return await exchange[func](...args)
@@ -69,6 +69,22 @@ async function retryExTaskIfTimeout (exchange, func, args=[]) {
         retry(err)
       }
       throw err
+    }
+  })
+}
+
+/**
+ * 用来调用exchange的读取类方法, 比如获取余额等等，当有任何错误时，自动retry
+ * */
+async function retryQueryTaskIfAnyError (exchange, func, args=[]) {
+  return await promiseRetry(async (retry, number) => {
+    try {
+      return await exchange[func](...args)
+    }
+    catch (err) {
+      console.log(err)
+      log.bright.yellow(`retry task - ${number} time`)
+      retry(err)
     }
   })
 }
@@ -286,7 +302,8 @@ module.exports = {
   saveJsonToCSV,
   simulate,
   resetConsole,
-  retryExTaskIfTimeout,
+  retryMutationTaskIfTimeout,
+  retryQueryTaskIfAnyError,
   cutExtractedInfoList,
   getTopVibrated,
   getTopVolume,

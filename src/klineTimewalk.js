@@ -240,7 +240,7 @@ async function useKlineStrategy(params){
   let shouldLockProfit = false
   let priceDropThroughCost = lastTradeCurrentState ? lastTradeCurrentState.closeLine.slice(-1)[0] <= lastPickedTrade.buyPrice: false
   if (priceDropThroughCost) { // 判断止盈线是否被触发
-    let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', [lastTradeCurrentState.symbol])
+    let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOrders', [lastTradeCurrentState.symbol])
     for (let limitOrder of lastPickedTrade.limitOrders) {
       let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
       if (!currentOrderStatus || currentOrderStatus.status==='closed') {
@@ -321,7 +321,7 @@ async function useKlineStrategy(params){
         /**
          * 取消当前open order
          * */
-        let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', [symbol])
+        let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOrders', [symbol])
         let orderIds = fetchedOrders.map(obj => obj.id)
 
         /*

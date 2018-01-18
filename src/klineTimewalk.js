@@ -255,7 +255,7 @@ async function useKlineStrategy(params){
       }
     }
   }
-
+  shouldLockProfit = false // 停掉止盈保本
 
   let dropThroughKline = false
   let fastMADropThroughMiddleMA = false

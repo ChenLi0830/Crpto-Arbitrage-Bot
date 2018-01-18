@@ -241,7 +241,7 @@ async function useKlineStrategy(params){
    * 是否锁定收益：止盈线被触发，且价格小于等于成本价 (lastPickedTrade.buyPrice) ?
    * */
   let shouldLockProfit = false
-  let priceDropThroughCost = lastTradeCurrentState ? lastTradeCurrentState.closeLine.slice(-1)[0] < lastPickedTrade.buyPrice: false
+  let priceDropThroughCost = lastTradeCurrentState ? lastTradeCurrentState.closeLine.slice(-1)[0] <= lastPickedTrade.buyPrice: false
   if (lastTradeCurrentState) { // 判断止盈线是否被触发
     let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', [symbol])
     for (let limitOrder of lastPickedTrade.limitOrders) {

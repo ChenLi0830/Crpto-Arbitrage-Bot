@@ -318,28 +318,27 @@ async function useKlineStrategy(params){
         let symbol = lastPickedTrade.symbol
         let targetCurrency = symbol.split('/')[0]
 
-        /**
-         * 取消当前open order
-         * */
-        let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOrders', [symbol])
-        let orderIds = fetchedOrders.map(obj => obj.id)
-
         /*
-        * 查看有多少limit order被filled了
+        * 查看limit order的filled amount
         * */
+        let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOrders', [symbol])
         let filledAmount = 0
         for (let limitOrder of lastPickedTrade.limitOrders) {
           let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
           console.log('currentOrderStatus', currentOrderStatus)
-          if (!currentOrderStatus || currentOrderStatus.status==='closed') {//全卖了
+          if (currentOrderStatus.status==='closed') { //止盈order被filled了
             filledAmount += limitOrder.amount
           }
-          else if (currentOrderStatus.status==='open') {
+          else if (currentOrderStatus.status==='open') { //止盈order未被filled，或被filled一部分
             filledAmount += Math.min(currentOrderStatus.filled, limitOrder.amount) // filled是safeFloat，可能跟实际值有出入
           }
         }
         console.log('filledAmount', filledAmount)
-
+        /**
+         * 取消被程序创建且当前为open的order
+         * */
+        let orderIds = []
+        fetchedOrders.forEach(obj => obj.status === 'open' && orderIds.push(obj.id))
         orderIds = _.filter(orderIds, id => lastPickedTrade.limitOrders.map(order=>order.id).indexOf(id) > -1)
 
         let cancelPromiseList = orderIds.map(orderId => retryExTaskIfTimeout(exchange, 'cancelOrder', [orderId, symbol, {'recvWindow': 60*10*1000}]))

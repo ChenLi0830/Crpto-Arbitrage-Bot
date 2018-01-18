@@ -341,15 +341,16 @@ async function useKlineStrategy(params){
           if (err) throw err
         })
 
-        let newBTCBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
-        log(`--- newBTCBalance ${newBTCBalance}`)
-        newPlotDot.value = newBTCBalance
-
-        if (sellAmount < (lastPickedTrade.boughtAmount * 0.01)) {
+        let minSellAmount = exchange.markets[lastPickedTrade.symbol].limits.amount.min
+        if (sellAmount < minSellAmount) {
           /**
-           * 如果小于1%，则认为是已经被用户或止盈卖光了
+           * 如果小于所能卖出的最小值，则认为是已经被用户或止盈卖光了
            * */
           newPlotDot.event = `${lastPickedTrade.symbol} is sold by user or limitOrders`
+          log(`${lastPickedTrade.symbol} has already been sold by user or limit orders`.blue)
+          let newBTCBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+          log(`--- newBTCBalance ${newBTCBalance}`)
+          newPlotDot.value = newBTCBalance
         }
         else {
           /**
@@ -357,6 +358,9 @@ async function useKlineStrategy(params){
            * */
           let sellResult = await retryExTaskIfTimeout(exchange, 'createMarketSellOrder', [symbol, sellAmount, {'recvWindow': 60*10*1000}])
           log(`--- Selling Result`.blue, sellResult)
+          let newBTCBalance = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
+          log(`--- newBTCBalance ${newBTCBalance}`)
+          newPlotDot.value = newBTCBalance
           newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
           let askPrice = (await retryExTaskIfTimeout(exchange, 'fetchL2OrderBook', [symbol])).asks[0]
           newPlotDot.sellPrice = askPrice[0]

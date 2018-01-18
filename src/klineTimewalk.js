@@ -232,9 +232,30 @@ async function useKlineStrategy(params){
     log(`The most recent price of ${lastTradeCurrentState.symbol} is ${lastTradeCurrentState.closeLine.slice(-1)[0]}`.yellow)
   }
 
-  /** get conditions */
+  /**
+   * 潜在盈利值
+   * */
   let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState) : 0
-  //  let lostTooMuch = potentialProfit < -0.03
+
+  /**
+   * 是否锁定收益：止盈线被触发，且价格小于等于成本价 (lastPickedTrade.buyPrice) ?
+   * */
+  let shouldLockProfit = false
+  let priceDropThroughCost = lastTradeCurrentState ? lastTradeCurrentState.closeLine.slice(-1)[0] < lastPickedTrade.buyPrice: false
+  if (lastTradeCurrentState) { // 判断止盈线是否被触发
+    let fetchedOrders = await retryExTaskIfTimeout(exchange, 'fetchOpenOrders', [symbol])
+    for (let limitOrder of lastPickedTrade.limitOrders) {
+      let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
+      let orderIsFilled = false
+      if (!currentOrderStatus || currentOrderStatus.status==='closed') {
+        /**
+         * 至少一个止盈线被触发了
+         * */
+        shouldLockProfit = priceDropThroughCost
+      }
+    }
+  }
+
 
   let dropThroughKline = false
   let fastMADropThroughMiddleMA = false
@@ -270,8 +291,8 @@ async function useKlineStrategy(params){
   let newPlotDot = null
 
   /** make changes */
-  if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint) {
-    log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline} fastMADropThroughMiddleMA ${fastMADropThroughMiddleMA} volumeLessThanPrevPoint ${volumeLessThanPrevPoint}`.yellow)
+  if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint || shouldLockProfit) {
+    log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline} fastMADropThroughMiddleMA ${fastMADropThroughMiddleMA} volumeLessThanPrevPoint ${volumeLessThanPrevPoint}  shouldLockProfit ${shouldLockProfit}`.yellow)
 
     if (PRODUCTION) {
       newPlotDot = {
@@ -283,7 +304,7 @@ async function useKlineStrategy(params){
         klineDerive: lastPickedTrade ? lastPickedTrade.klines[windows[0]][klineIndex] / lastPickedTrade.klines[windows[0]][klineIndex-1] : 'n/a',
       }
 
-      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint) {
+      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint || shouldLockProfit) {
         /*
         * 卖币
         * */
@@ -480,10 +501,12 @@ async function useKlineStrategy(params){
 
         let newBTCAmount = (await retryExTaskIfTimeout(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
         let spentBTC = BTCAmount - newBTCAmount
-        log(`---    spent ${Math.trunc(100 * spentBTC/BTCAmount)}% in purchase, average purchase price ${spentBTC / boughtAmount}`)
+        let buyPrice = spentBTC / boughtAmount
+        log(`---    spent ${Math.trunc(100 * spentBTC/BTCAmount)}% in purchase, average purchase price ${buyPrice}`)
+        lastPickedTrade.buyPrice = buyPrice
 
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
-        newPlotDot.price = (spentBTC / boughtAmount) // todo 换成实际价格
+        newPlotDot.price = (spentBTC / boughtAmount)
         newPlotDot.value = BTCAmount
       }
 
@@ -517,7 +540,7 @@ async function useKlineStrategy(params){
       //      lastPickedTrade = null
       //    }
       // buy in this symbol
-      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint) {
+      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint || shouldLockProfit) {
         log(`Sell ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
         newPlotDot.sellPrice = lastTradeCurrentState.closeLine[klineIndex]

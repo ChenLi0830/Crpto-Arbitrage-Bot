@@ -23,6 +23,7 @@ const {
   addBTCVolValue,
   generateCutProfitList,
   addPaddingExtractedInfoList,
+  checkMarketCondition,
 } = utils
 
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
@@ -41,7 +42,7 @@ let {
  * 测试用，lineLength是用来获得24小时vol时用的
  * */
 lineLength = 1 * 24 * 60 / 5//
-KLINE_FILE = `./savedData/klines/klines-simulate-7-4.js`
+KLINE_FILE = `./savedData/klines/klines-simulate-30-4.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
@@ -241,8 +242,15 @@ async function useKlineStrategy(params){
     )).join(' '))
   }
 
-  let pickedTrade = pickTradeFromList(newExtractedInfoList, whiteList)
+  /**
+   * 通过过去30分钟的涨跌判断market是否适合买入
+   * */
+  marketIsGood = checkMarketCondition(newExtractedInfoList, volumeWhiteList24H)
 
+  let pickedTrade = pickTradeFromList(newExtractedInfoList, whiteList)
+  if (!marketIsGood) {
+    pickedTrade = null
+  }
   if (pickedTrade) {
     log('pickedTrade'.green, pickedTrade.symbol, pickedTrade.rate)
   }

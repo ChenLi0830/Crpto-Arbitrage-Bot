@@ -97,7 +97,15 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
   try {
 
     if (typeof endTo !== 'number') endTo = new Date().getTime()
+    /**
+     * 保证endTo不会正好等于要获取点的timeStamp，避免多获取一个点
+     * */
+    if (endTo % intervalInMillesec === 0) endTo += 1
     let startFrom = endTo - numberOfPoints * intervalInMillesec // 每个点5分钟
+    /**
+     * 整5分钟时，有时数据库还没有获得最新的点，为避免获得的点数不足，因此多fetch一个点，如果多了后面再截掉
+     * */
+    startFrom -= intervalInMillesec
 
     let promises = symbols.map(symbol => {
       return klineGetDuringPeriod(exchangeId, symbol, startFrom, endTo)
@@ -106,10 +114,10 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
     let klineList = await Promise.all(promises)
 
     /**
-     * 有时会多fetch一个点，当多fetch一个点时，从左边去掉一个点
+     * 如果多获取了一个点，则截掉
      * */
     if (klineList[0].length > numberOfPoints) {
-      console.error('!!: klineList[0].length > numberOfPoints')
+      console.error(`!!: klineList[0].length${klineList[0].length} < numberOfPoints ${numberOfPoints}`)
       klineList = klineList.map(symbolKlines => symbolKlines.slice(-numberOfPoints))
       console.log('klineList', klineList[0].length)
     }

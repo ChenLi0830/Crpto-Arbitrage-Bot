@@ -342,21 +342,22 @@ function printLine(lineData){
   log.yellow('\n' + chart, '\n')
 }
 
-function checkMarketCondition(newExtractedInfoList, volumeWhiteList24H, observePeriod = 60 / 5) {
+function checkMarketCondition(newExtractedInfoList, topVolList, observePeriod = 5 / 5) {
   let accumulatedNoCount = 0
   let accumulatedChange = 0
-  volumeWhiteList24H = volumeWhiteList24H.slice(0,10) // 选取top10来做评判
+//  topVolList = topVolList.slice(0,10) // 选取top10来做评判
   for (let extractedInfo of newExtractedInfoList){
-    if (volumeWhiteList24H.indexOf(extractedInfo.symbol) > -1) {
+//    if (topVolList.indexOf(extractedInfo.symbol) > -1) {
       let currentIndex = extractedInfo.closeLine.length - 1
-      let diffPercent = (extractedInfo.closeLine[currentIndex] - extractedInfo.closeLine[currentIndex - observePeriod])/extractedInfo.closeLine[currentIndex]
+      let diffPercent = (extractedInfo.closeLine[currentIndex] - extractedInfo.closeLine[currentIndex - observePeriod])/extractedInfo.closeLine[currentIndex - observePeriod]
       accumulatedChange += diffPercent
       accumulatedNoCount = accumulatedNoCount + (diffPercent > 0 ? 1 : -1)
-    }
+//    }
   }
-//  console.log('accumulatedNoCount', accumulatedNoCount)
-//  console.log('accumulatedChange', accumulatedChange)
-  return accumulatedChange > 0 && accumulatedNoCount > 0
+  let avgChange = accumulatedChange / newExtractedInfoList.length
+  console.log('accumulatedNoCount', accumulatedNoCount)
+  console.log('accumulatedChange', accumulatedChange)
+  return (avgChange > 0) || (accumulatedNoCount > newExtractedInfoList.length * 0.1)
 }
 
 module.exports = {

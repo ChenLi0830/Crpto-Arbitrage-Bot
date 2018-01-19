@@ -90,6 +90,46 @@ async function retryQueryTaskIfAnyError (exchange, func, args=[]) {
 }
 
 /**
+ * 为ExtractedInfoList 从开始处添加padding
+ * */
+function addPaddingExtractedInfoList (extractedInfoList, paddingLength=1) {
+  let paddingList = []
+  for (let i=0; i<paddingLength; i++) {
+    paddingList.push(0)
+  }
+
+  let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
+    /** newKlines - length==lineLength */
+    let newKlines = {}
+    Object.keys(extractedInfo.klines).forEach(key => {
+      newKlines[key] = [...paddingList, ...extractedInfo.klines[key]]
+    })
+    /** newVolumes */
+    let newVolumes = [...paddingList, ...extractedInfo.volumeLine]
+    /** newPrices */
+    let newCloseLine = [...paddingList, ...extractedInfo.closeLine]
+    let newOpenLine = [...paddingList, ...extractedInfo.openLine]
+    let newHighLine = [...paddingList, ...extractedInfo.highLine]
+    let newLowLine = [...paddingList, ...extractedInfo.lowLine]
+    /** newTimes */
+    let newTimes = [...paddingList, ...extractedInfo.timeLine]
+
+    return {
+      ...extractedInfo,
+      klines: newKlines,
+      volumeLine: newVolumes,
+      closeLine: newCloseLine,
+      openLine: newOpenLine,
+      highLine: newHighLine,
+      lowLine: newLowLine,
+      timeLine: newTimes,
+    }
+  })
+  return newExtractedInfoList
+}
+
+
+/**
  * 从ExtractedInfoList里截取出对应长度的
  * */
 function cutExtractedInfoList (extractedInfoList, start, lineLength) {
@@ -297,6 +337,11 @@ function generateCutProfitList(extractedInfo, observeWindow, dynamicProfitList) 
 //  ]
 }
 
+function printLine(lineData){
+  const chart = asciichart.plot(lineData, {height: 15})
+  log.yellow('\n' + chart, '\n')
+}
+
 module.exports = {
   getMarkets,
   saveJsonToCSV,
@@ -311,4 +356,6 @@ module.exports = {
   addBTCVolValue,
   getTopWeighted,
   generateCutProfitList,
+  printLine,
+  addPaddingExtractedInfoList,
 }

@@ -22,6 +22,7 @@ const {
   addVibrateValue,
   addBTCVolValue,
   generateCutProfitList,
+  addPaddingExtractedInfoList,
 } = utils
 
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
@@ -132,7 +133,7 @@ function rateAndSort(extractedInfoList, whiteList) {
 
     const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
     let matchBuyingCriteria = checkBuyingCriteria(extractedInfo)
-    let isNewKline = ((new Date().getTime() - extractedInfo.timeLine.slice(-1)[0]) < 45 * 1000) //todo 改成30
+    let isNewKline = process.env.PRODUCTION ? ((new Date().getTime() - extractedInfo.timeLine.slice(-1)[0]) < 45 * 1000) : false
     if (matchBuyingCriteria || extractedInfo.symbol===tempBuy) {
       tempBuy = ''
       let rate = rateCurrency(klines, volumeLine)
@@ -143,6 +144,10 @@ function rateAndSort(extractedInfoList, whiteList) {
     * */
     else if (isNewKline) {
       let prevExtractedInfo = cutExtractedInfoList([extractedInfo], 0, extractedInfo.timeLine.length-1)[0]
+      /**
+       * Add padding 保证prevExtractedInfo和extractedInfo一样长
+       * */
+      prevExtractedInfo = addPaddingExtractedInfoList([prevExtractedInfo], 1)[0]
       let prevPointMatchBuyingCriteria = checkBuyingCriteria(prevExtractedInfo)
 
       if (prevPointMatchBuyingCriteria) {
@@ -157,18 +162,11 @@ function rateAndSort(extractedInfoList, whiteList) {
   return sortedPool
 }
 
-function printLine(lineData){
-  const chart = asciichart.plot(lineData, {height: 15})
-  log.yellow('\n' + chart, '\n')
-}
-
 function pickTradeFromList(newExtractedInfoList, whiteList){
   let sortedPool = rateAndSort(newExtractedInfoList, whiteList)
   if (sortedPool.length > 0) {
-    //    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
     log('Picking from list: '.green, sortedPool.map(o => o.symbol).join(' '))
     let pickedTrade
-    //    if (sortedPool[0].rate > 20){
     pickedTrade  = sortedPool[0]
     return pickedTrade
   }
@@ -527,7 +525,7 @@ async function useKlineStrategy(params){
 
       potentialProfit !== 0 && log(`money ${money} -> ${money * (1 + potentialProfit)}`.yellow)
 
-      money = money * (1 + potentialProfit) * 0.9995 // 0.001 手续费
+      money = money * (1 + potentialProfit) * 0.999 // 0.0005 * 2 的手续费
       newPlotDot.value = money
 
       //    // buy in this symbol
@@ -604,30 +602,6 @@ async function timeWalk(extractedInfoList){
     log(`${currentTime} ->`.green)
 
     /**
-     * 给 newExtractedInfoList 添加 vibrateValue 和 BTCVolume
-     * */
-//    extractedInfoList = addVibrateValue(extractedInfoList, observeWindow)
-//    extractedInfoList = addBTCVolValue(extractedInfoList, observeWindow)
-
-    /**
-     * 用momentum获得对应的whiteList -> weightWhiteList,
-     * */
-//    if ((shift % 288) === 0) {
-//      let startDate = new Date()
-//      let topWeighted = getTopWeighted(newExtractedInfoList, topWeightNo, 3 * 24 * 60 / 5)
-//      weightWhiteList = (topWeighted).map(o => `${o.symbol}`)
-//      console.log('weightWhiteList', weightWhiteList)
-//      log(topWeighted.map(o => `${o.symbol}: ${o.weightValue}`).join(' '))
-//    }
-
-    /**
-     * 用Vibrate获得对应的whiteList -> vibrateWhiteList,
-     * */
-    //    let topVibrated = getTopVibrated(extractedInfoList, topVibratedNo, observeWindow)
-    //    vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
-    //    log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
-
-    /**
      * 用Volume获得对应的whiteList -> volumeWhiteList,
      * */
     if (useVolumeToChooseCurrency) {
@@ -649,11 +623,6 @@ async function timeWalk(extractedInfoList){
     money = klineResult.money
     let newPlotDot = klineResult.newPlotDot
 
-    //    /** volumeStrategy */
-    //    let volumeResult = useVolumeStrategy({newExtractedInfoList, lastPickedTradeList, money, currentTime})
-    //    lastPickedTradeList = volumeResult.lastPickedTradeList
-    //    money = volumeResult.money
-    //    let newPlotDot = volumeResult.newPlotDot
     if (!!newPlotDot) {
       plot.push(newPlotDot)
     }
@@ -809,6 +778,8 @@ async function timeWalk(extractedInfoList){
      * TimeWalk simulation
      * */
     const extractedInfoList = require(`.${KLINE_FILE}`)
+    whiteList = require('./config').whiteList
+    dynamicProfitList = require('./config').dynamicProfitList
     try {
       await timeWalk(extractedInfoList)
     } catch (error) {

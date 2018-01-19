@@ -78,7 +78,7 @@ function checkValueCriteria(klines, closeLine, openLine) {
 
 function checkVolCriteria(volumeLine){
   let isVolumeIncreaseFast = (volumeLine[klineIndex] / volumeLine[klineIndex-1]) > 1
-  let volumeAvg = _.mean(volumeLine.slice(-20))
+  let volumeAvg = _.mean(volumeLine.slice(-48))
   let isVolumeHigherThanAvg = volumeLine[klineIndex] > volumeAvg
   return isVolumeIncreaseFast && isVolumeHigherThanAvg
 }
@@ -295,7 +295,7 @@ async function useKlineStrategy(params){
      * */
     let sellKline = process.env.PRODUCTION ? klineIndex-1 : klineIndex
     dropThroughKline = lastTradeCurrentState.closeLine[sellKline] < lastTradeCurrentState.klines[windows[0]][sellKline]
-    fastMADropThroughMiddleMA = lastTradeCurrentState.klines[windows[0]][sellKline] < lastTradeCurrentState.klines[windows[1]][sellKline]
+    fastMADropThroughMiddleMA = (lastTradeCurrentState.klines[windows[0]][sellKline] < lastTradeCurrentState.klines[windows[1]][sellKline] && lastTradeCurrentState.klines[windows[0]][sellKline-1] > lastTradeCurrentState.klines[windows[1]][sellKline-1])
     volumeLessThanPrevPoint = (lastTradeCurrentState.volumeLine[sellKline] / lastTradeCurrentState.volumeLine[sellKline - 1]) < 0.5
   }
 

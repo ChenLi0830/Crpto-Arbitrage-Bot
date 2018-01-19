@@ -3,8 +3,7 @@ const KlineTable = require('./config').KlineTable
 let AWS = require('./config').AWS
 let docClient = new AWS.DynamoDB.DocumentClient()
 const _ = require('lodash')
-const api = require('../api')
-const {windows} = require('../config')
+const {windows, intervalInMillesec} = require('../config')
 
 async function klineGetDuringPeriod (exchangeId, symbol, startFrom, endTo) {
   const params = {
@@ -98,13 +97,22 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
   try {
 
     if (typeof endTo !== 'number') endTo = new Date().getTime()
-    let startFrom = endTo - numberOfPoints * 5 * 60 * 1000 // 每个点5分钟
+    let startFrom = endTo - numberOfPoints * intervalInMillesec // 每个点5分钟
 
     let promises = symbols.map(symbol => {
       return klineGetDuringPeriod(exchangeId, symbol, startFrom, endTo)
     })
 
     let klineList = await Promise.all(promises)
+
+    /**
+     * 有时会多fetch一个点，当多fetch一个点时，从左边去掉一个点
+     * */
+    if (klineList[0].length > numberOfPoints) {
+      console.error('!!: klineList[0].length > numberOfPoints')
+      klineList = klineList.map(symbolKlines => symbolKlines.slice(-numberOfPoints))
+      console.log('klineList', klineList[0].length)
+    }
 
     let extractedInfoList = formatKlineList(klineList, symbols, numberOfPoints)
 

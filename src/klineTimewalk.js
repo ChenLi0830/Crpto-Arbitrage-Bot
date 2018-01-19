@@ -672,24 +672,31 @@ async function timeWalk(extractedInfoList){
     log(`---        BTC Balance - ${money}`.green)
     log(`---------- Fetching Balance ---------- \n`.green)
 
+//    /**
+//     * 初始化读取 numberOfPoints+padding 个数据
+//     * */
+//    let padding = 100
+//    let nowStamp = new Date().getTime()
+//    let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
+//    log(`Initialized fetch of extractedInfoList takes ${((new Date().getTime() - nowStamp)/1000)}s`)
+
     while (true) {
       try {
         /**
          * Read data and get currentTime
          * */
+//        let fetchStamp = new Date().getTime()
+//        extractedInfoList = await
+//        //extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
+//        log(`It takes ${((new Date().getTime() - fetchStamp)/1000)}s to finish fetching new data`)
         let padding = 100
+        let nowStamp = new Date().getTime()
         let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
-        /**
-         * 有时extractedInfoList会多fetch一个点，当多fetch一个点时，从左边去掉一个点
-         * */
-        if (extractedInfoList[0].timeLine.length > numberOfPoints) {
-          let start = extractedInfoList[0].timeLine.length - numberOfPoints
-          extractedInfoList = cutExtractedInfoList(extractedInfoList, start, numberOfPoints)
-        }
+        log(`Initialized fetch of extractedInfoList takes ${((new Date().getTime() - nowStamp)/1000)}s`)
 
         klineIndex = extractedInfoList[0].timeLine.length - 1
-        if (klineIndex !== numberOfPoints - 1) {
-          throw new Error(`klineIndex!==${numberOfPoints - 1}`)
+        if (klineIndex !== numberOfPoints) {
+          throw new Error(`klineIndex ${klineIndex} !==${numberOfPoints}`)
         }
 
         /**

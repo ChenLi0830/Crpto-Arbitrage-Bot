@@ -675,24 +675,20 @@ async function timeWalk(extractedInfoList){
 //    /**
 //     * 初始化读取 numberOfPoints+padding 个数据
 //     * */
-//    let padding = 100
-//    let nowStamp = new Date().getTime()
-//    let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
-//    log(`Initialized fetch of extractedInfoList takes ${((new Date().getTime() - nowStamp)/1000)}s`)
+    let padding = 100
+    let nowStamp = new Date().getTime()
+    let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
+    log(`Initialized fetch of extractedInfoList takes ${((new Date().getTime() - nowStamp)/1000)}s`)
 
     while (true) {
       try {
         /**
          * Read data and get currentTime
          * */
-//        let fetchStamp = new Date().getTime()
-//        extractedInfoList = await
-//        //extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
-//        log(`It takes ${((new Date().getTime() - fetchStamp)/1000)}s to finish fetching new data`)
-        let padding = 100
-        let nowStamp = new Date().getTime()
-        let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
-        log(`Initialized fetch of extractedInfoList takes ${((new Date().getTime() - nowStamp)/1000)}s`)
+        let fetchStamp = new Date().getTime()
+        extractedInfoList = await fetchNewPointAndAttach(extractedInfoList, exchangeId)
+        //extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
+        log(`It takes ${((new Date().getTime() - fetchStamp)/1000)}s to finish fetching new data`)
 
         klineIndex = extractedInfoList[0].timeLine.length - 1
         if (klineIndex !== numberOfPoints) {

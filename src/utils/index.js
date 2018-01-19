@@ -5,7 +5,9 @@ const json2csv = require('json2csv')
 const fs = require('fs')
 const promiseRetry = require('promise-retry')
 const _ = require('lodash')
+const {windows} = require('../config')
 const {timeWalkCalcProfit} = require('../pickCoinMomentum')
+const klineListGetDuringPeriod = require('../database/klineListGetDuringPeriod')
 
 function resetConsole () {
   const readline = require('readline')
@@ -342,6 +344,49 @@ function printLine(lineData){
   log.yellow('\n' + chart, '\n')
 }
 
+async function fetchNewPointAndAttach(extractedInfoList, exchangeId) {
+  let symbols = extractedInfoList.map(o => o.symbol)
+  let newPoints = await klineListGetDuringPeriod(exchangeId, symbols, 1)
+  let sliceEndIdx = extractedInfoList[0].timeLine.length - 1
+
+  let updatedInfoList = extractedInfoList.map(extractedInfo => {
+    let newPoint = _.find(newPoints, {symbol: extractedInfo.symbol})
+    let updatedInfo = {
+      ...extractedInfo,
+      volumeLine: [...(extractedInfo.volumeLine.slice(0,sliceEndIdx)), newPoint.volumeLine.slice(-1)[0]],
+      closeLine: [...(extractedInfo.closeLine.slice(0,sliceEndIdx)), newPoint.closeLine.slice(-1)[0]],
+      openLine: [...(extractedInfo.openLine.slice(0,sliceEndIdx)), newPoint.openLine.slice(-1)[0]],
+      highLine: [...(extractedInfo.highLine.slice(0,sliceEndIdx)), newPoint.highLine.slice(-1)[0]],
+      lowLine: [...(extractedInfo.lowLine.slice(0,sliceEndIdx)), newPoint.lowLine.slice(-1)[0]],
+      timeLine: [...(extractedInfo.timeLine.slice(0,sliceEndIdx)), newPoint.timeLine.slice(-1)[0]],
+    }
+
+    let newKlines = {}
+    for (let window of windows) {
+      let endIdx = updatedInfo.closeLine.length
+      let startIdx = updatedInfo.closeLine.length - window
+      let lastPoint = _.mean(updatedInfo.closeLine.slice(startIdx, endIdx))
+      newKlines[window] = [...extractedInfo.klines[window].slice(0, sliceEndIdx), lastPoint]
+    }
+
+//    if (extractedInfo.symbol==='ETH/BTC') {
+//      console.log('extractedInfo.timeLine.slice(-2)', extractedInfo.timeLine.slice(-2))
+//      console.log('updatedInfo.timeLine.slice(-2)', updatedInfo.timeLine.slice(-2))
+//      console.log('extractedInfo.closeLine.slice(-2)', extractedInfo.closeLine.slice(-2))
+//      console.log('updatedInfo.closeLine.slice(-2)', updatedInfo.closeLine.slice(-2))
+//      console.log('newKlines[4].slice(-2)', newKlines[4].slice(-2))
+//      console.log('updatedInfo.klines[4].slice(-2)', updatedInfo.klines[4].slice(-2))
+//    }
+
+    updatedInfo.klines = newKlines
+    return updatedInfo
+  })
+
+  return extractedInfoList
+}
+
+
+
 module.exports = {
   getMarkets,
   saveJsonToCSV,
@@ -358,4 +403,5 @@ module.exports = {
   generateCutProfitList,
   printLine,
   addPaddingExtractedInfoList,
+  fetchNewPointAndAttach,
 }

@@ -382,7 +382,7 @@ async function fetchNewPointAndAttach(extractedInfoList, exchangeId) {
     return updatedInfo
   })
 
-  return extractedInfoList
+  return updatedInfoList
 }
 
 

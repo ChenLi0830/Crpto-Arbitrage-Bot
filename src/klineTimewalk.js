@@ -23,6 +23,7 @@ const {
   addBTCVolValue,
   generateCutProfitList,
   addPaddingExtractedInfoList,
+  fetchNewPointAndAttach,
 } = utils
 
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')

@@ -117,9 +117,7 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
      * 如果多获取了一个点，则截掉
      * */
     if (klineList[0].length > numberOfPoints) {
-      console.error(`!!: klineList[0].length${klineList[0].length} < numberOfPoints ${numberOfPoints}`)
       klineList = klineList.map(symbolKlines => symbolKlines.slice(-numberOfPoints))
-      console.log('klineList', klineList[0].length)
     }
 
     let extractedInfoList = formatKlineList(klineList, symbols, numberOfPoints)

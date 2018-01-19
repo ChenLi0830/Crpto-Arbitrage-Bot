@@ -8,6 +8,7 @@ module.exports = {
 
   interval : '5m',
   intervalInMillesec : 5 * 60 * 1000,
+  intervalInMins: 5,
   recordNb : 500, // default = 500, use less for large intervals,
   numberOfFetch : 5, // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多,
   windows : [4, 16, 99], // 必须从小到大，maximum = 500 - lineLength,

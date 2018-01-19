@@ -5,7 +5,7 @@ const json2csv = require('json2csv')
 const fs = require('fs')
 const promiseRetry = require('promise-retry')
 const _ = require('lodash')
-const {windows} = require('../config')
+const {windows, intervalInMins} = require('../config')
 const {timeWalkCalcProfit} = require('../pickCoinMomentum')
 const klineListGetDuringPeriod = require('../database/klineListGetDuringPeriod')
 
@@ -254,7 +254,7 @@ function addWeightValue(extractedInfoList, observeLength) {
 /**
  * 获得最高势能（稳增+阶跃）的几个币
  * */
-function getTopWeighted(extractedInfoList, topWeightNo, observeWindow = 7*24*60/5){
+function getTopWeighted(extractedInfoList, topWeightNo, observeWindow = 7*24*60/intervalInMins){
   extractedInfoList = addWeightValue(extractedInfoList, observeWindow)
 
   let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.weightValue)

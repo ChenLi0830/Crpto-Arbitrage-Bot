@@ -34,6 +34,7 @@ let {
   KLINE_FILE,
   PLOT_CSV_FILE,
   intervalInMillesec,
+  intervalInMins,
   whiteList,
   dynamicProfitList,
 } = require('./config')
@@ -41,7 +42,7 @@ let {
 /**
  * 测试用，lineLength是用来获得24小时vol时用的
  * */
-lineLength = 1 * 24 * 60 / 5//
+lineLength = 1 * 24 * 60 / intervalInMins
 KLINE_FILE = `./savedData/klines/klines-simulate-7-4.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
@@ -61,8 +62,7 @@ let useVolumeToChooseCurrency = true
 let tempBuy = '' // used for debugging, 比如设置成 ETH/BTC，production就会马上买入BTC
 
 let cutProfitList = []
-let numberOfPoints = 24 * 60 / 5
-let marketIsGood = false
+let numberOfPoints = 24 * 60 / intervalInMins
 
 //-----------------------------------------------------------------------------
 
@@ -506,7 +506,7 @@ async function useKlineStrategy(params){
 
         console.log('orderBook.asks[0]', orderBook.asks[0])
         console.log('lastPickedTrade.boughtAmount', lastPickedTrade.boughtAmount)
-        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5, dynamicProfitList)
+        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / intervalInMins, dynamicProfitList)
 
         let createLimitOrderPromises = cutProfitList.map(cutProfit => {
           let cutAmount = boughtAmount * cutProfit.percent / 100
@@ -574,7 +574,7 @@ async function useKlineStrategy(params){
         lastPickedTrade = null
       } else {
         lastPickedTrade = pickedTrade
-        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5, dynamicProfitList)
+        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / intervalInMins, dynamicProfitList)
         log(`Buy in ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
       }

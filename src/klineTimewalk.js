@@ -60,6 +60,7 @@ let useVolumeToChooseCurrency = true
 let tempBuy = '' // used for debugging, 比如设置成 ETH/BTC，production就会马上买入BTC
 
 let cutProfitList = []
+let lostTooMuchPercent = 2
 
 //-----------------------------------------------------------------------------
 
@@ -176,17 +177,17 @@ function noCurrentTradeOrNewTradeBetter(pickedTrade, lastPickedTrade){
   return !lastPickedTrade || (pickedTrade.rate > lastPickedTrade.rate)
 }
 
-function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
-  if (lastPickedTrade) {
-    let purchasePrice = lastPickedTrade.closeLine[klineIndex]
-    let sellPrice = lastTradeCurrentState.closeLine[klineIndex]
+function calcProfitPercent(lastPickedTrade, lastTradeCurrentState, lostTooMuch){
+  let purchasePrice = lastPickedTrade.closeLine[klineIndex]
+  let sellPrice = lostTooMuch ? lastPickedTrade.buyPrice * (1 - lostTooMuchPercent/100) : lastTradeCurrentState.closeLine[klineIndex]
 
-    let purchaseTime = lastPickedTrade.timeLine[klineIndex]
-    let purchaseIndex = lastTradeCurrentState.timeLine.indexOf(purchaseTime)
+  let purchaseTime = lastPickedTrade.timeLine[klineIndex]
+  let purchaseIndex = lastTradeCurrentState.timeLine.indexOf(purchaseTime)
 
-    let soldMoney = 0
-    let volPercent = 100
-    let cutProfitIndex = 0
+  let soldMoney = 0
+  let volPercent = 100
+  let cutProfitIndex = 0
+  if (!lostTooMuch) { // 如果没有触发止损，则计算是否有触发止盈。止损止盈随价格变化触发的，无法准确模拟
     for (let i = purchaseIndex; i <= klineIndex; i++){
       /**
        * 计算止盈点获得的钱soldMoney和剩余的volPercent
@@ -197,18 +198,16 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
         cutProfitIndex++
       }
     }
-
-    soldMoney += (volPercent * sellPrice)
-    let avgSellPrice = soldMoney / 100
-//    log('avgSellPrice', avgSellPrice)
-
-//    let hitCost = 1.003 // 冲击成本，1为无成本
-    let hitCost = 1 // 冲击成本，1为无成本
-    let profitPercent = (avgSellPrice - purchasePrice * hitCost) / purchasePrice
-    return profitPercent
-  } else {
-    return 0
   }
+
+  soldMoney += (volPercent * sellPrice)
+  let avgSellPrice = soldMoney / 100
+  //    log('avgSellPrice', avgSellPrice)
+
+  //    let hitCost = 1.003 // 冲击成本，1为无成本
+  let hitCost = 1 // 冲击成本，1为无成本
+  let profitPercent = (avgSellPrice - purchasePrice * hitCost) / purchasePrice
+  return profitPercent
 }
 
 async function useKlineStrategy(params){
@@ -228,28 +227,41 @@ async function useKlineStrategy(params){
     log(`The most recent price of ${lastTradeCurrentState.symbol} is ${lastTradeCurrentState.closeLine.slice(-1)[0]}`.yellow)
   }
 
+  let lostTooMuch = false
+  if (lastTradeCurrentState) {
+    lostTooMuch = process.env.PRODUCTION
+      ? (lastTradeCurrentState.closeLine.slice(-1)[0] < (lastPickedTrade.buyPrice * (1 - lostTooMuchPercent/100)))
+      : (lastTradeCurrentState.lowLine.slice(-1)[0] < (lastPickedTrade.buyPrice * (1 - lostTooMuchPercent/100)))
+  }
+  if (lostTooMuch) {
+    console.log('lastPickedTrade.buyPrice', lastPickedTrade.buyPrice)
+    console.log('lastTradeCurrentState.lowLine.slice(-1)[0]', lastTradeCurrentState.lowLine.slice(-1)[0])
+  }
+  lostTooMuch = false
   /**
    * 潜在盈利值
    * */
-  let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState) : 0
+  let potentialProfit = lastPickedTrade ? calcProfitPercent(lastPickedTrade, lastTradeCurrentState, lostTooMuch) : 0
 
   /**
    * 是否锁定收益：止盈线被触发，且价格小于等于成本价 (lastPickedTrade.buyPrice) ?
    * */
   let shouldLockProfit = false
-  let priceDropThroughCost = lastTradeCurrentState ? lastTradeCurrentState.closeLine.slice(-1)[0] <= lastPickedTrade.buyPrice: false
-  if (priceDropThroughCost) { // 判断止盈线是否被触发
-    let fetchedOrders = await retryQueryTaskIfAnyError(exchange, 'fetchOrders', [lastTradeCurrentState.symbol])
-    log(`Current price ${lastTradeCurrentState.closeLine.slice(-1)[0]} <= Purchase price ${lastPickedTrade.buyPrice}`.green)
-    for (let limitOrder of lastPickedTrade.limitOrders) {
-      let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
-      console.log('currentOrderStatus.status', currentOrderStatus.status)
-      if (currentOrderStatus.status==='closed') {
-        /**
-         * 至少一个止盈线被触发了
-         * */
-        shouldLockProfit = true
-        log('ShouldLockProfit becomes true'.yellow)
+  if (process.env.PRODUCTION) {
+    let priceDropThroughCost = lastTradeCurrentState ? lastTradeCurrentState.closeLine.slice(-1)[0] <= lastPickedTrade.buyPrice: false
+    if (priceDropThroughCost) { // 判断止盈线是否被触发
+      let fetchedOrders = await retryQueryTaskIfAnyError(exchange, 'fetchOrders', [lastTradeCurrentState.symbol])
+      log(`Current price ${lastTradeCurrentState.closeLine.slice(-1)[0]} <= Purchase price ${lastPickedTrade.buyPrice}`.green)
+      for (let limitOrder of lastPickedTrade.limitOrders) {
+        let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
+        console.log('currentOrderStatus.status', currentOrderStatus.status)
+        if (currentOrderStatus.status==='closed') {
+          /**
+           * 至少一个止盈线被触发了
+           * */
+          shouldLockProfit = true
+          log('ShouldLockProfit becomes true'.yellow)
+        }
       }
     }
   }
@@ -289,8 +301,8 @@ async function useKlineStrategy(params){
   let newPlotDot = null
 
   /** make changes */
-  if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint || shouldLockProfit) {
-    log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline} fastMADropThroughMiddleMA ${fastMADropThroughMiddleMA} volumeLessThanPrevPoint ${volumeLessThanPrevPoint}  shouldLockProfit ${shouldLockProfit}`.yellow)
+  if ((!lastPickedTrade && pickedTrade) || earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint || shouldLockProfit || lostTooMuch) {
+    log(`--- earnedEnough ${earnedEnough} dropThroughKline ${dropThroughKline} fastMADropThroughMiddleMA ${fastMADropThroughMiddleMA} volumeLessThanPrevPoint ${volumeLessThanPrevPoint}  shouldLockProfit ${shouldLockProfit} lostTooMuch ${lostTooMuch} `.yellow)
 
     if (PRODUCTION) {
       newPlotDot = {
@@ -538,14 +550,17 @@ async function useKlineStrategy(params){
       //      lastPickedTrade = null
       //    }
       // buy in this symbol
-      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint || shouldLockProfit) {
+      if (earnedEnough || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint || shouldLockProfit || lostTooMuch) {
         log(`Sell ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
         newPlotDot.sellPrice = lastTradeCurrentState.closeLine[klineIndex]
         lastPickedTrade = null
       } else {
         lastPickedTrade = pickedTrade
-        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5)
+        console.log('klineIndex', klineIndex)
+        console.log('pickedTrade.closeLine.length', pickedTrade.closeLine.length)
+        lastPickedTrade.buyPrice = pickedTrade.closeLine[klineIndex]
+        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5, dynamicProfitList)
         log(`Buy in ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
       }
@@ -609,12 +624,12 @@ async function timeWalk(extractedInfoList){
       volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
       log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-      topVolume = getTopVolume(newExtractedInfoList, undefined, 1 * 60 / 5, 5000 / 24)
+      topVolume = getTopVolume(newExtractedInfoList, undefined, 4 * 60 / 5, 5000 / 6)
       volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
       log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-      let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
-      console.log('whiteListSet', whiteListSet)
+//      let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
+//      console.log('whiteListSet', whiteListSet)
     }
 
     /** useKlineStrategy */

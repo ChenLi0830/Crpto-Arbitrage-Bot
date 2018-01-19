@@ -60,6 +60,8 @@ let useVolumeToChooseCurrency = true
 let tempBuy = '' // used for debugging, 比如设置成 ETH/BTC，production就会马上买入BTC
 
 let cutProfitList = []
+let numberOfPoints = 24 * 60 / 5
+let marketIsGood = false
 
 //-----------------------------------------------------------------------------
 
@@ -213,6 +215,32 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
 
 async function useKlineStrategy(params){
   let {newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList=[]} = params
+
+  /**
+   * 用volume来获得volumeWhiteList
+   * */
+  if (useVolumeToChooseCurrency) {
+    let topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints, 5000)
+    volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+    //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+
+    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 6, 5000 / 6)
+    volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+    //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+
+    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
+    log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
+
+    /*
+    * 显示1小时内，除了已经在whiteList里，vol最高的前10
+    * */
+    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 24)
+    topVolume = _.filter(topVolume, o => !whiteListSet.has(o.symbol)).slice(0,10)
+    log(`Top volume 1H: `.yellow + topVolume.map(o => (
+      `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green
+    )).join(' '))
+  }
+
   let pickedTrade = pickTradeFromList(newExtractedInfoList, whiteList)
 
   if (pickedTrade) {
@@ -545,7 +573,7 @@ async function useKlineStrategy(params){
         lastPickedTrade = null
       } else {
         lastPickedTrade = pickedTrade
-        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5)
+        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5, dynamicProfitList)
         log(`Buy in ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
       }
@@ -601,22 +629,6 @@ async function timeWalk(extractedInfoList){
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
 
-    /**
-     * 用Volume获得对应的whiteList -> volumeWhiteList,
-     * */
-    if (useVolumeToChooseCurrency) {
-      let topVolume = getTopVolume(newExtractedInfoList, undefined, 24 * 60 / 5, 5000)
-      volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-      log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-      topVolume = getTopVolume(newExtractedInfoList, undefined, 1 * 60 / 5, 5000 / 24)
-      volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-      log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-      let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
-      console.log('whiteListSet', whiteListSet)
-    }
-
     /** useKlineStrategy */
     let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})
     lastPickedTrade = klineResult.lastPickedTrade
@@ -665,7 +677,6 @@ async function timeWalk(extractedInfoList){
         /**
          * Read data and get currentTime
          * */
-        let numberOfPoints = 24 * 60 / 5
         let padding = 100
         let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
         /**
@@ -725,28 +736,6 @@ async function timeWalk(extractedInfoList){
         let timeEpoch = Number(extractedInfoList[0].timeLine[klineIndex])
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
         log(`${moment().format('MMMM Do YYYY, h:mm:ss a')}, Data time: ${currentTime} ->`.green)
-
-        if (useVolumeToChooseCurrency) {
-          let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints, 5000)
-          volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints / 6, 5000 / 6)
-          volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-          let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
-          log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
-
-          /*
-          * 显示1小时内，除了已经在whiteList里，vol最高的前10
-          * */
-          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints / 24)
-          topVolume = _.filter(topVolume, o => !whiteListSet.has(o.symbol)).slice(0,10)
-          log(`Top volume 1H: `.yellow + topVolume.map(o => (
-            `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green
-            )).join(' '))
-        }
 
         log(`---------- Using Kline Strategy ---------- `.green)
         let klineResult = await useKlineStrategy({newExtractedInfoList: extractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList})

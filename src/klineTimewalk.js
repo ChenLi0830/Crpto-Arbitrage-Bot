@@ -35,6 +35,7 @@ let {
   PLOT_CSV_FILE,
   intervalInMillesec,
   whiteList,
+  blackList,
   dynamicProfitList,
 } = require('./config')
 
@@ -108,6 +109,15 @@ function rateCurrency(klines, volumeLine) {
   return rate
 }
 
+function getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList) {
+  let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
+  /*
+  * 删除黑名单中的部分
+  * */
+  blackList && blackList.forEach(symbol => whiteListSet.delete(symbol))
+  return [...whiteListSet]
+}
+
 function rateAndSort(extractedInfoList, whiteList) {
   let buyingPool = []
 
@@ -115,12 +125,12 @@ function rateAndSort(extractedInfoList, whiteList) {
     /**
      * 白名单过滤
      * */
-    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
-    whiteList = [...whiteListSet]
-//    whiteList = [...whiteListSet].slice(0, topVolumeNo)
+    let newWhiteList = getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList)
 
-    if (whiteList && whiteList.length > 0) {
-      if (!whiteList.includes(extractedInfo.symbol)) {
+//    newWhiteList = [...whiteListSet].slice(0, topVolumeNo)
+
+    if (newWhiteList && newWhiteList.length > 0) {
+      if (!newWhiteList.includes(extractedInfo.symbol)) {
         continue
       }
     }
@@ -229,14 +239,14 @@ async function useKlineStrategy(params){
     volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
     //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
-    log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
+    let overallWhiteList = getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList)
+    log(`WhiteList: ${overallWhiteList}`.yellow)
 
     /*
     * 显示1小时内，除了已经在whiteList里，vol最高的前10
     * */
     topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 24)
-    topVolume = _.filter(topVolume, o => !whiteListSet.has(o.symbol)).slice(0,10)
+    topVolume = _.filter(topVolume, o => overallWhiteList.indexOf(o.symbol) === -1).slice(0,10)
     log(`Top volume 1H: `.yellow + topVolume.map(o => (
       `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green
     )).join(' '))
@@ -713,6 +723,7 @@ async function timeWalk(extractedInfoList){
 
           await api.sleep(100)
           whiteList = require('./config').whiteList
+          blackList = require('./config').blackList
           dynamicProfitList = require('./config').dynamicProfitList
         }
         catch (error) {

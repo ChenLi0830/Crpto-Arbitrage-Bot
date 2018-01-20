@@ -26,6 +26,7 @@ module.exports = {
    * 设置白名单
    * */
   whiteList: [],
+  blackList: [],
 //  whiteList: [
 //    'ETH/BTC',
 //    'MANA/BTC'

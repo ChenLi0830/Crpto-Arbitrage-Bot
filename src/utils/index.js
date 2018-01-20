@@ -347,18 +347,18 @@ function printLine(lineData){
 async function fetchNewPointAndAttach(extractedInfoList, exchangeId) {
   let symbols = extractedInfoList.map(o => o.symbol)
   let newPoints = await klineListGetDuringPeriod(exchangeId, symbols, 1)
-  let sliceEndIdx = extractedInfoList[0].timeLine.length - 1
+  let sliceLength = extractedInfoList[0].timeLine.length - 1
 
   let updatedInfoList = extractedInfoList.map(extractedInfo => {
     let newPoint = _.find(newPoints, {symbol: extractedInfo.symbol})
     let updatedInfo = {
       ...extractedInfo,
-      volumeLine: [...(extractedInfo.volumeLine.slice(0,sliceEndIdx)), newPoint.volumeLine.slice(-1)[0]],
-      closeLine: [...(extractedInfo.closeLine.slice(0,sliceEndIdx)), newPoint.closeLine.slice(-1)[0]],
-      openLine: [...(extractedInfo.openLine.slice(0,sliceEndIdx)), newPoint.openLine.slice(-1)[0]],
-      highLine: [...(extractedInfo.highLine.slice(0,sliceEndIdx)), newPoint.highLine.slice(-1)[0]],
-      lowLine: [...(extractedInfo.lowLine.slice(0,sliceEndIdx)), newPoint.lowLine.slice(-1)[0]],
-      timeLine: [...(extractedInfo.timeLine.slice(0,sliceEndIdx)), newPoint.timeLine.slice(-1)[0]],
+      volumeLine: [...(extractedInfo.volumeLine.slice(-sliceLength)), newPoint.volumeLine.slice(-1)[0]],
+      closeLine: [...(extractedInfo.closeLine.slice(-sliceLength)), newPoint.closeLine.slice(-1)[0]],
+      openLine: [...(extractedInfo.openLine.slice(-sliceLength)), newPoint.openLine.slice(-1)[0]],
+      highLine: [...(extractedInfo.highLine.slice(-sliceLength)), newPoint.highLine.slice(-1)[0]],
+      lowLine: [...(extractedInfo.lowLine.slice(-sliceLength)), newPoint.lowLine.slice(-1)[0]],
+      timeLine: [...(extractedInfo.timeLine.slice(-sliceLength)), newPoint.timeLine.slice(-1)[0]],
     }
 
     let newKlines = {}
@@ -366,17 +366,8 @@ async function fetchNewPointAndAttach(extractedInfoList, exchangeId) {
       let endIdx = updatedInfo.closeLine.length
       let startIdx = updatedInfo.closeLine.length - window
       let lastPoint = _.mean(updatedInfo.closeLine.slice(startIdx, endIdx))
-      newKlines[window] = [...extractedInfo.klines[window].slice(0, sliceEndIdx), lastPoint]
+      newKlines[window] = [...extractedInfo.klines[window].slice(-sliceLength), lastPoint]
     }
-
-//    if (extractedInfo.symbol==='ETH/BTC') {
-//      console.log('extractedInfo.timeLine.slice(-2)', extractedInfo.timeLine.slice(-2))
-//      console.log('updatedInfo.timeLine.slice(-2)', updatedInfo.timeLine.slice(-2))
-//      console.log('extractedInfo.closeLine.slice(-2)', extractedInfo.closeLine.slice(-2))
-//      console.log('updatedInfo.closeLine.slice(-2)', updatedInfo.closeLine.slice(-2))
-//      console.log('newKlines[4].slice(-2)', newKlines[4].slice(-2))
-//      console.log('updatedInfo.klines[4].slice(-2)', updatedInfo.klines[4].slice(-2))
-//    }
 
     updatedInfo.klines = newKlines
     return updatedInfo

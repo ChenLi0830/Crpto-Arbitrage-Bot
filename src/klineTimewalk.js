@@ -687,8 +687,13 @@ async function timeWalk(extractedInfoList){
          * Read data and get currentTime
          * */
         let fetchStamp = new Date().getTime()
-        extractedInfoList = await fetchNewPointAndAttach(extractedInfoList, exchangeId)
-        //extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
+        extractedInfoList = await fetchNewPointAndAttach(extractedInfoList, exchangeId, windows)
+//        console.log('extractedInfoList[0].symbol', extractedInfoList[0].symbol)
+//        console.log('extractedInfoList[0].closeLine.length', extractedInfoList[0].closeLine.length)
+//        console.log('extractedInfoList[0].closeLine.slice(-3)', extractedInfoList[0].closeLine.slice(-3))
+//        console.log('extractedInfoList[0].timeLine.slice(-3)', extractedInfoList[0].timeLine.slice(-3))
+//        console.log('extractedInfoList[0].klines[windows[0]].slice(-3)', extractedInfoList[0].klines[windows[0]].slice(-3))
+//        console.log('extractedInfoList[0].klines[windows[1]].slice(-3)', extractedInfoList[0].klines[windows[1]].slice(-3))
         log(`It takes ${((new Date().getTime() - fetchStamp)/1000)}s to finish fetching new data`)
 
         klineIndex = extractedInfoList[0].timeLine.length - 1

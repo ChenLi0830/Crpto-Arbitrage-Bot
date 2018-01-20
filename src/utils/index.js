@@ -344,29 +344,45 @@ function printLine(lineData){
   log.yellow('\n' + chart, '\n')
 }
 
-async function fetchNewPointAndAttach(extractedInfoList, exchangeId) {
+async function fetchNewPointAndAttach(extractedInfoList, exchangeId, windows) {
+  /**
+   * fetch 两个新点，并更新extractedInfoList
+   * */
   let symbols = extractedInfoList.map(o => o.symbol)
-  let newPoints = await klineListGetDuringPeriod(exchangeId, symbols, 1)
-  let sliceLength = extractedInfoList[0].timeLine.length - 1
+  let newPointsList = await klineListGetDuringPeriod(exchangeId, symbols, 2)
+  let sliceEnd = extractedInfoList[0].timeLine.length - 2
 
   let updatedInfoList = extractedInfoList.map(extractedInfo => {
-    let newPoint = _.find(newPoints, {symbol: extractedInfo.symbol})
+    //更新2点，保证前面点的close值为exchange最终值
+    let newPoints = _.find(newPointsList, {symbol: extractedInfo.symbol})
+
+    /**
+     * 当extractedInfo的最后一个点未更新完毕，则保留点 0 - length-3，最后两点更新
+     * 当extractedInfo的最后一个点更新完毕时，则保留点 1 - length-2
+     * 利用shift完成
+     * */
+    let shift = extractedInfo.timeLine.slice(-1)[0] !== newPoints.timeLine.slice(-1)[0] ? 1 : 0
+//    console.log('extractedInfo.closeLine.slice(-5)', extractedInfo.closeLine.slice(-5))
+//    console.log('extractedInfo.closeLine.slice(shift, sliceEnd + shift).slice(-3))', extractedInfo.closeLine.slice(shift, sliceEnd + shift).slice(-3))
+//    console.log('newPoints.closeLine.slice(-2)', newPoints.closeLine.slice(-2))
+//    process.exit()
     let updatedInfo = {
       ...extractedInfo,
-      volumeLine: [...(extractedInfo.volumeLine.slice(-sliceLength)), newPoint.volumeLine.slice(-1)[0]],
-      closeLine: [...(extractedInfo.closeLine.slice(-sliceLength)), newPoint.closeLine.slice(-1)[0]],
-      openLine: [...(extractedInfo.openLine.slice(-sliceLength)), newPoint.openLine.slice(-1)[0]],
-      highLine: [...(extractedInfo.highLine.slice(-sliceLength)), newPoint.highLine.slice(-1)[0]],
-      lowLine: [...(extractedInfo.lowLine.slice(-sliceLength)), newPoint.lowLine.slice(-1)[0]],
-      timeLine: [...(extractedInfo.timeLine.slice(-sliceLength)), newPoint.timeLine.slice(-1)[0]],
+      volumeLine: [...(extractedInfo.volumeLine.slice(shift, sliceEnd + shift)), ...newPoints.volumeLine.slice(-2)],
+      closeLine: [...(extractedInfo.closeLine.slice(shift, sliceEnd + shift)), ...newPoints.closeLine.slice(-2)],
+      openLine: [...(extractedInfo.openLine.slice(shift, sliceEnd + shift)), ...newPoints.openLine.slice(-2)],
+      highLine: [...(extractedInfo.highLine.slice(shift, sliceEnd + shift)), ...newPoints.highLine.slice(-2)],
+      lowLine: [...(extractedInfo.lowLine.slice(shift, sliceEnd + shift)), ...newPoints.lowLine.slice(-2)],
+      timeLine: [...(extractedInfo.timeLine.slice(shift, sliceEnd + shift)), ...newPoints.timeLine.slice(-2)],
     }
 
     let newKlines = {}
     for (let window of windows) {
       let endIdx = updatedInfo.closeLine.length
       let startIdx = updatedInfo.closeLine.length - window
+      let secondToLastPoint = _.mean(updatedInfo.closeLine.slice(startIdx-1, endIdx-1))
       let lastPoint = _.mean(updatedInfo.closeLine.slice(startIdx, endIdx))
-      newKlines[window] = [...extractedInfo.klines[window].slice(-sliceLength), lastPoint]
+      newKlines[window] = [...extractedInfo.klines[window].slice(shift, sliceEnd + shift), secondToLastPoint, lastPoint]
     }
 
     updatedInfo.klines = newKlines

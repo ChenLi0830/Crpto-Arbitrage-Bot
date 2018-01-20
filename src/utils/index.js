@@ -5,7 +5,6 @@ const json2csv = require('json2csv')
 const fs = require('fs')
 const promiseRetry = require('promise-retry')
 const _ = require('lodash')
-const {windows, intervalInMins} = require('../config')
 const {timeWalkCalcProfit} = require('../pickCoinMomentum')
 const klineListGetDuringPeriod = require('../database/klineListGetDuringPeriod')
 
@@ -254,7 +253,7 @@ function addWeightValue(extractedInfoList, observeLength) {
 /**
  * 获得最高势能（稳增+阶跃）的几个币
  * */
-function getTopWeighted(extractedInfoList, topWeightNo, observeWindow = 7*24*60/intervalInMins){
+function getTopWeighted(extractedInfoList, topWeightNo, observeWindow){
   extractedInfoList = addWeightValue(extractedInfoList, observeWindow)
 
   let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.weightValue)
@@ -344,7 +343,7 @@ function printLine(lineData){
   log.yellow('\n' + chart, '\n')
 }
 
-async function fetchNewPointAndAttach(extractedInfoList, exchangeId) {
+async function fetchNewPointAndAttach(extractedInfoList, exchangeId, windows) {
   let symbols = extractedInfoList.map(o => o.symbol)
   let newPoints = await klineListGetDuringPeriod(exchangeId, symbols, 1)
   let sliceEndIdx = extractedInfoList[0].timeLine.length - 1
@@ -385,7 +384,46 @@ async function fetchNewPointAndAttach(extractedInfoList, exchangeId) {
   return updatedInfoList
 }
 
+function getMovingAverage(extractedInfo, windows){
+  let klines = {}
+  for (let window of windows) {
+    let endIdx = extractedInfo.timeLine.length - 1
+    let startIdx = extractedInfo.timeLine.length - window
+    let result = []
 
+    for (let shift=0; shift<extractedInfo.timeLine.length - Math.max(...windows); shift++) {
+      let value = 0
+      for (let i=startIdx-shift; i<=endIdx-shift; i++) {
+        value += (extractedInfo.closeLine[i] / window)
+      }
+      result.unshift(value)
+    }
+
+    klines[window] = result
+  }
+
+  return klines
+}
+
+function addMAToExtractedInfoList(extractedInfoList, windows) {
+  let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
+    let klines = getMovingAverage(extractedInfo, windows)
+    let MAlength = klines[windows[0]].length
+
+    return {
+      ...extractedInfo,
+      klines,
+      volumeLine: extractedInfo.volumeLine.slice(-MAlength),
+      closeLine: extractedInfo.closeLine.slice(-MAlength),
+      openLine: extractedInfo.openLine.slice(-MAlength),
+      highLine: extractedInfo.highLine.slice(-MAlength),
+      lowLine: extractedInfo.lowLine.slice(-MAlength),
+      timeLine: extractedInfo.timeLine.slice(-MAlength),
+    }
+  })
+
+  return newExtractedInfoList
+}
 
 module.exports = {
   getMarkets,
@@ -404,4 +442,5 @@ module.exports = {
   printLine,
   addPaddingExtractedInfoList,
   fetchNewPointAndAttach,
+  addMAToExtractedInfoList,
 }

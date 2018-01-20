@@ -31,28 +31,19 @@ let last24HtimeStamp = null
 let needUpdate24H = true
 
 function extractOHLCVInfo(ohlcv, symbol) {
-  let klines = {}
-
-  /** get klines */
-  for (let window of windows) {
-    klines[window] = getAverage(ohlcv, window, ohlcvIndex)
-  }
-
-  let totalKlinelength = klines[windows[0]].length
-
   /** get timeLine */
-  let timeLine = ohlcv.slice(-totalKlinelength).map(x => x[0])
+  let timeLine = ohlcv.map(x => x[0])
   /** get priceLine */
-  let openLine = ohlcv.slice(-totalKlinelength).map(x => x[1])
-  let highLine = ohlcv.slice(-totalKlinelength).map(x => x[2])
-  let lowLine = ohlcv.slice(-totalKlinelength).map(x => x[3])
-  let closeLine = ohlcv.slice(-totalKlinelength).map(x => x[4])
+  let openLine = ohlcv.map(x => x[1])
+  let highLine = ohlcv.map(x => x[2])
+  let lowLine = ohlcv.map(x => x[3])
+  let closeLine = ohlcv.map(x => x[4])
   /** get volumeLine */
-  let volumeLine = ohlcv.slice(-totalKlinelength).map(x => x[5])
+  let volumeLine = ohlcv.map(x => x[5])
 
   return {
     symbol,
-    klines,
+//    klines,
     volumeLine,
     closeLine,
     openLine,
@@ -60,22 +51,6 @@ function extractOHLCVInfo(ohlcv, symbol) {
     lowLine,
     timeLine,
   }
-}
-
-function getAverage(ohlcv, window, ohlcvIndex){
-  let endIdx = ohlcv.length - 1
-  let startIdx = ohlcv.length - window
-  let result = []
-
-  for (let shift=0; shift<ohlcv.length - Math.max(...windows); shift++) {
-    let value = 0
-    for (let i=startIdx-shift; i<=endIdx-shift; i++) {
-      value += (ohlcv[i][ohlcvIndex] / window)
-    }
-    result.unshift(value)
-  }
-
-  return result
 }
 
 function printLine(lineData){
@@ -97,89 +72,88 @@ async function fetchPromiseBySegment(promises, segNumber) {
 }
 
 (async function main () {
-  if (process.env.PRODUCTION) {
-    log('--------- Fetching Data For Production -------'.blue)
-
-    log(`---       interval ${interval}`)
-    log(`---       intervalInMillesec ${intervalInMillesec}`)
-    log(`---       recordNb ${recordNb}`)
-    log(`---       numberOfFetch ${numberOfFetch}`)
-
-    if (numberOfFetch > 1){
-      log('---       numberOfFetch should can only be 1 in production!'.red)
-    }
-
-    log(`---       windows ${windows}`)
-    log(`---       lineLength ${lineLength}`)
-    log(`---       KLINE_FILE ${KLINE_FILE}`)
-
-  }
-
-  let exchangeId = 'binance'
-  let exchange = new ccxt[exchangeId](ccxt.extend(credentials[exchangeId]))
+//  if (process.env.PRODUCTION) {
+//    log('--------- Fetching Data For Production -------'.blue)
+//
+//    log(`---       interval ${interval}`)
+//    log(`---       intervalInMillesec ${intervalInMillesec}`)
+//    log(`---       recordNb ${recordNb}`)
+//    log(`---       numberOfFetch ${numberOfFetch}`)
+//
+//    if (numberOfFetch > 1){
+//      log('---       numberOfFetch should can only be 1 in production!'.red)
+//    }
+//
+//    log(`---       windows ${windows}`)
+//    log(`---       lineLength ${lineLength}`)
+//    log(`---       KLINE_FILE ${KLINE_FILE}`)
+//
+//  }
 
   while (true) { // keep fetching
-//    await api.sleep(intervalInMillesec * 0.6)
     try {
+      let exchangeId = 'binance'
+      let exchange = new ccxt[exchangeId](ccxt.extend(credentials[exchangeId]))
+      console.log('exchange', !!exchange)
       await exchange.loadMarkets()
       let extractedInfoList = []
       let extractedInfo24HList = []
       let lastFetch24HTimeStamp = null
 
-      if (process.env.PRODUCTION) {
-        if (!last24HtimeStamp || (new Date().getTime() - last24HtimeStamp > 30 * 60 * 1000)) {
-          last24HtimeStamp = new Date().getTime()
-          needUpdate24H = true
-        }
-        await api.sleep(10000)
-
-        let promises = []
-        let validSymbols = []
-        let promiseList24H = []
-        exchange.symbols.forEach(symbol => {
-          if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) {
-
-            if (fetchKlineBlackList && fetchKlineBlackList.length > 0 && fetchKlineBlackList.includes(symbol)) {
-              log(`${symbol} is in fetchKlineBlackList, skipping it`.yellow)
-              return
-            }
-
-            if (fetchKlineWhiteList && fetchKlineWhiteList.length > 0 && !fetchKlineWhiteList.includes(symbol)) {
-              log(`${symbol} is not in fetchKlineWhiteList, skipping it`.yellow)
-              return
-            }
-
-            validSymbols.push(symbol)
-            promises.push(exchange.fetchOHLCV(symbol, interval, undefined, recordNb))
-            promiseList24H.push(exchange.fetchOHLCV(symbol, '30m', undefined, 48))
-          }
-        })
-
-
-        let ohlcvList = await fetchPromiseBySegment(promises, 10)
-        let ohlcv24HList = needUpdate24H ? await await fetchPromiseBySegment(promiseList24H, 10) : []
-        console.log('ohlcvList.length', ohlcvList.length)
-        console.log('ohlcv24HList.length', ohlcv24HList.length)
-
-        for (let i=0; i<ohlcvList.length; i++) {
-          let ohlcv = ohlcvList[i]
-          let symbol = validSymbols[i]
-          let ohlcv24H = needUpdate24H ? ohlcv24HList[i] : null
-
-          if (ohlcv.length < recordNb){
-            log(`symbol ${symbol} doesn't have that much history data, skipping it`.green)
-            continue
-          }
-
-          let extractedInfo = extractOHLCVInfo(ohlcv, symbol)
-          let extractedInfo24H = needUpdate24H ? extractOHLCVInfo(ohlcv24H, symbol) : null
-          extractedInfoList.push(extractedInfo)
-          needUpdate24H && extractedInfo24HList.push(extractedInfo24H)
-        }
-      }
-      else {
-        let exchange = new ccxt.binance()
-        await exchange.loadMarkets()
+//      if (process.env.PRODUCTION) {
+//        if (!last24HtimeStamp || (new Date().getTime() - last24HtimeStamp > 30 * 60 * 1000)) {
+//          last24HtimeStamp = new Date().getTime()
+//          needUpdate24H = true
+//        }
+//        await api.sleep(10000)
+//
+//        let promises = []
+//        let validSymbols = []
+//        let promiseList24H = []
+//        exchange.symbols.forEach(symbol => {
+//          if ((symbol.indexOf('.d') < 0) && symbol.endsWith('BTC')) {
+//
+//            if (fetchKlineBlackList && fetchKlineBlackList.length > 0 && fetchKlineBlackList.includes(symbol)) {
+//              log(`${symbol} is in fetchKlineBlackList, skipping it`.yellow)
+//              return
+//            }
+//
+//            if (fetchKlineWhiteList && fetchKlineWhiteList.length > 0 && !fetchKlineWhiteList.includes(symbol)) {
+//              log(`${symbol} is not in fetchKlineWhiteList, skipping it`.yellow)
+//              return
+//            }
+//
+//            validSymbols.push(symbol)
+//            promises.push(exchange.fetchOHLCV(symbol, interval, undefined, recordNb))
+//            promiseList24H.push(exchange.fetchOHLCV(symbol, '30m', undefined, 48))
+//          }
+//        })
+//
+//
+//        let ohlcvList = await fetchPromiseBySegment(promises, 10)
+//        let ohlcv24HList = needUpdate24H ? await await fetchPromiseBySegment(promiseList24H, 10) : []
+//        console.log('ohlcvList.length', ohlcvList.length)
+//        console.log('ohlcv24HList.length', ohlcv24HList.length)
+//
+//        for (let i=0; i<ohlcvList.length; i++) {
+//          let ohlcv = ohlcvList[i]
+//          let symbol = validSymbols[i]
+//          let ohlcv24H = needUpdate24H ? ohlcv24HList[i] : null
+//
+//          if (ohlcv.length < recordNb){
+//            log(`symbol ${symbol} doesn't have that much history data, skipping it`.green)
+//            continue
+//          }
+//
+//          let extractedInfo = extractOHLCVInfo(ohlcv, symbol)
+//          let extractedInfo24H = needUpdate24H ? extractOHLCVInfo(ohlcv24H, symbol) : null
+//          extractedInfoList.push(extractedInfo)
+//          needUpdate24H && extractedInfo24HList.push(extractedInfo24H)
+//        }
+//      }
+//      else {
+//        let exchange = new ccxt.binance()
+//        await exchange.loadMarkets()
 
         extractedInfoList = []
         for (let symbol of exchange.symbols) {
@@ -228,9 +202,9 @@ async function fetchPromiseBySegment(promises, segNumber) {
             extractedInfoList.push(extractedInfo)
           }
         }
-      }
+//      }
 
-      log(`klineDataLength ${extractedInfoList[0].klines[windows[0]].length}`)
+      log(`klineDataLength ${extractedInfoList[0].timeLine.length}`)
       fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
       if (needUpdate24H) {
         console.log('needUpdate24H', needUpdate24H)

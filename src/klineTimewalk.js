@@ -24,16 +24,16 @@ const {
   generateCutProfitList,
   addPaddingExtractedInfoList,
   fetchNewPointAndAttach,
+  addMAToExtractedInfoList,
 } = utils
 
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
 
 let {
-  lineLength,
+//  lineLength,
   windows,
   KLINE_FILE,
   PLOT_CSV_FILE,
-  intervalInMillesec,
   intervalInMins,
   whiteList,
   dynamicProfitList,
@@ -43,7 +43,7 @@ let {
  * 测试用，lineLength是用来获得24小时vol时用的
  * */
 lineLength = 1 * 24 * 60 / intervalInMins
-KLINE_FILE = `./savedData/klines/klines-simulate-7-4.js`
+KLINE_FILE = `./savedData/klines/klines-3m-7d-Jan-19.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
@@ -56,7 +56,7 @@ let topVibratedNo = 10
 let topVolumeNo = 10
 let topWeightNo = 10
 let observeWindow = 300
-let klineIndex = process.env.PRODUCTION ? 0 : lineLength - 1 // 在生产环境中看上一个kline的index
+let klineIndex = process.env.PRODUCTION==='true' ? 0 : lineLength - 1 // 在生产环境中看上一个kline的index
 
 let useVolumeToChooseCurrency = true
 let tempBuy = '' // used for debugging, 比如设置成 ETH/BTC，production就会马上买入BTC
@@ -66,7 +66,7 @@ let numberOfPoints = 24 * 60 / intervalInMins
 
 //-----------------------------------------------------------------------------
 
-function checkValueCriteria(klines, closeLine, openLine) {
+function checkValueCriteria(klines, closeLine, openLine, windows) {
   let isFastKlineLarger = (klines[windows[0]][klineIndex] >= klines[windows[1]][klineIndex]) && (klines[windows[0]][klineIndex] >= klines[windows[2]][klineIndex])
   let isMiddleKlineLarger = klines[windows[1]][klineIndex] >= klines[windows[2]][klineIndex]
   let priceGreaterThanFastKline = closeLine[klineIndex] > klines[windows[0]][klineIndex]
@@ -84,15 +84,15 @@ function checkVolCriteria(volumeLine){
   return isVolumeIncreaseFast && isVolumeHigherThanAvg
 }
 
-function checkBuyingCriteria(extractedInfo) {
+function checkBuyingCriteria(extractedInfo, windows) {
   const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
   let matchVolCriteria = checkVolCriteria(volumeLine)
   let isPricesHigherThanPrevPoint = (closeLine[klineIndex] > closeLine[klineIndex-1]) && (openLine[klineIndex] > openLine[klineIndex-1])
-  let nowValueMatchCriteria = checkValueCriteria(klines, closeLine, openLine)
+  let nowValueMatchCriteria = checkValueCriteria(klines, closeLine, openLine, windows)
   return nowValueMatchCriteria && matchVolCriteria && isPricesHigherThanPrevPoint
 }
 
-function rateCurrency(klines, volumeLine) {
+function rateCurrency(klines, volumeLine, windows) {
   let fastKline = klines[windows[0]]
   let deriveK = (fastKline[klineIndex] / fastKline[klineIndex-1])
   let deriveVolume = (volumeLine[klineIndex] / volumeLine[klineIndex-1])
@@ -108,7 +108,7 @@ function rateCurrency(klines, volumeLine) {
   return rate
 }
 
-function rateAndSort(extractedInfoList, whiteList) {
+function rateAndSort(extractedInfoList, whiteList, windows) {
   let buyingPool = []
 
   for (let extractedInfo of extractedInfoList) {
@@ -135,11 +135,11 @@ function rateAndSort(extractedInfoList, whiteList) {
     }
 
     const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
-    let matchBuyingCriteria = checkBuyingCriteria(extractedInfo)
-    let isNewKline = process.env.PRODUCTION ? ((new Date().getTime() - extractedInfo.timeLine.slice(-1)[0]) < 45 * 1000) : false
+    let matchBuyingCriteria = checkBuyingCriteria(extractedInfo, windows)
+    let isNewKline = process.env.PRODUCTION==='true' ? ((new Date().getTime() - extractedInfo.timeLine.slice(-1)[0]) < 45 * 1000) : false
     if (matchBuyingCriteria || extractedInfo.symbol===tempBuy) {
       tempBuy = ''
-      let rate = rateCurrency(klines, volumeLine)
+      let rate = rateCurrency(klines, volumeLine, windows)
       buyingPool.push({...extractedInfo, rate})
     }
     /*
@@ -155,7 +155,7 @@ function rateAndSort(extractedInfoList, whiteList) {
 
       if (prevPointMatchBuyingCriteria) {
         const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = prevExtractedInfo
-        let rate = rateCurrency(klines, volumeLine)
+        let rate = rateCurrency(klines, volumeLine, windows)
         buyingPool.push({...extractedInfo, rate})
       }
     }
@@ -165,8 +165,8 @@ function rateAndSort(extractedInfoList, whiteList) {
   return sortedPool
 }
 
-function pickTradeFromList(newExtractedInfoList, whiteList){
-  let sortedPool = rateAndSort(newExtractedInfoList, whiteList)
+function pickTradeFromList(newExtractedInfoList, whiteList, windows){
+  let sortedPool = rateAndSort(newExtractedInfoList, whiteList, windows)
   if (sortedPool.length > 0) {
     log('Picking from list: '.green, sortedPool.map(o => o.symbol).join(' '))
     let pickedTrade
@@ -215,7 +215,7 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
 }
 
 async function useKlineStrategy(params){
-  let {newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList=[]} = params
+  let {newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList=[], windows} = params
 
   /**
    * 用volume来获得volumeWhiteList
@@ -242,7 +242,7 @@ async function useKlineStrategy(params){
     )).join(' '))
   }
 
-  let pickedTrade = pickTradeFromList(newExtractedInfoList, whiteList)
+  let pickedTrade = pickTradeFromList(newExtractedInfoList, whiteList, windows)
 
   if (pickedTrade) {
     log('pickedTrade'.green, pickedTrade.symbol, pickedTrade.rate)
@@ -294,7 +294,7 @@ async function useKlineStrategy(params){
     /**
      * 生产环境中，卖出是用前一根kline判断
      * */
-    let sellKline = process.env.PRODUCTION ? klineIndex-1 : klineIndex
+    let sellKline = process.env.PRODUCTION==='true' ? klineIndex-1 : klineIndex
     dropThroughKline = lastTradeCurrentState.closeLine[sellKline] < lastTradeCurrentState.klines[windows[0]][sellKline]
     fastMADropThroughMiddleMA = (lastTradeCurrentState.klines[windows[0]][sellKline] < lastTradeCurrentState.klines[windows[1]][sellKline] && lastTradeCurrentState.klines[windows[0]][sellKline-1] > lastTradeCurrentState.klines[windows[1]][sellKline-1])
     volumeLessThanPrevPoint = (lastTradeCurrentState.volumeLine[sellKline] / lastTradeCurrentState.volumeLine[sellKline - 1]) < 0.5
@@ -611,7 +611,7 @@ function useVolumeStrategy(params) {
   return {lastPickedTradeList, money, newPlotDot}
 }
 
-async function timeWalk(extractedInfoList){
+async function timeWalk(extractedInfoList, windows){
   let shift = 0
 //  let shift = 8901 - 2016 - 1
   let money = 100
@@ -621,13 +621,12 @@ async function timeWalk(extractedInfoList){
 
   while (shift + lineLength < extractedInfoList[0].volumeLine.length) {
     let newExtractedInfoList = cutExtractedInfoList (extractedInfoList, shift, lineLength)
-//    fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
     let timeEpoch = newExtractedInfoList[0].timeLine[klineIndex]
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
 
     /** useKlineStrategy */
-    let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})
+    let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList, windows})
     lastPickedTrade = klineResult.lastPickedTrade
     money = klineResult.money
     let newPlotDot = klineResult.newPlotDot
@@ -640,13 +639,14 @@ async function timeWalk(extractedInfoList){
   }
   //  profit, rate
   saveJsonToCSV(plot, ['time', 'value', 'event', 'profit', 'rate', 'BTCvolume', 'volDerive', 'klineDerive', 'price', 'sellPrice'], PLOT_CSV_FILE)
+  return money
 }
 
 
 (async function main () {
   let PRODUCTION = process.env.PRODUCTION
   log(`PRODUCTION ${PRODUCTION}`.red)
-  if (PRODUCTION) {
+  if (PRODUCTION === 'true') {
     utils.resetConsole()
     /**
      * Production
@@ -683,7 +683,7 @@ async function timeWalk(extractedInfoList){
          * Read data and get currentTime
          * */
         let fetchStamp = new Date().getTime()
-        extractedInfoList = await fetchNewPointAndAttach(extractedInfoList, exchangeId)
+        extractedInfoList = await fetchNewPointAndAttach(extractedInfoList, exchangeId, windows)
         //extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
         log(`It takes ${((new Date().getTime() - fetchStamp)/1000)}s to finish fetching new data`)
 
@@ -762,21 +762,26 @@ async function timeWalk(extractedInfoList){
       }
     }
   }
-  else {
+  else if (PRODUCTION === 'false'){
     /**
      * TimeWalk simulation
      * */
-    const extractedInfoList = require(`.${KLINE_FILE}`)
+    let extractedInfoList = require(`.${KLINE_FILE}`)
+//    console.log('extractedInfoList[0].klines[windows[5]].slice(-5)', extractedInfoList[0].klines[windows[0]].length)
+//    console.log('extractedInfoList[0].klines[windows[5]].slice(-5)', extractedInfoList[0].klines[windows[0]].slice(-5))
+    extractedInfoList = addMAToExtractedInfoList(extractedInfoList, windows)
+//    console.log('extractedInfoList[0].klines[windows[5]].slice(-5)', extractedInfoList[0].klines[windows[0]].length)
+//    console.log('extractedInfoList[0].klines[windows[5]].slice(-5)', extractedInfoList[0].klines[windows[0]].slice(-5))
+
     whiteList = require('./config').whiteList
     dynamicProfitList = require('./config').dynamicProfitList
     try {
-      await timeWalk(extractedInfoList)
+      await timeWalk(extractedInfoList, windows)
     } catch (error) {
       console.error(error)
       log(error.message.red)
     }
   }
-  process.exit()
 })()
 
-//module.exports =
+module.exports = {timeWalk}

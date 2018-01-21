@@ -65,6 +65,7 @@ let cutProfitList = []
 let numberOfPoints = 24 * 60 / 5
 let marketIsGood = false
 let lastBoughtSymbol = null
+let prevBuyingPoolList = []
 //-----------------------------------------------------------------------------
 
 function checkValueCriteria(klines, closeLine, openLine) {
@@ -122,17 +123,18 @@ function rateAndSort(extractedInfoList, whiteList) {
   let buyingPool = []
 
   for (let extractedInfo of extractedInfoList) {
-    /**
-     * 白名单过滤
-     * */
-    let newWhiteList = getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList)
 
     /**
      * 上个刚刚买入的symbol如果和这个一样，则跳过，不连续买入同一个symbol
      * */
-//    if (lastBoughtSymbol === extractedInfo.symbol) {
-//      continue
-//    }
+    //    if (lastBoughtSymbol === extractedInfo.symbol) {
+    //      continue
+    //    }
+
+    /**
+     * 白名单过滤
+     * */
+    let newWhiteList = getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList)
 
     if (newWhiteList && newWhiteList.length > 0) {
       if (!newWhiteList.includes(extractedInfo.symbol)) {
@@ -146,6 +148,22 @@ function rateAndSort(extractedInfoList, whiteList) {
       continue
     }
     else if (weightWhiteList && weightWhiteList.length > 0 && !weightWhiteList.includes(extractedInfo.symbol)) {
+      continue
+    }
+
+    /**
+     * 过滤已经进行到一半的行情
+     * */
+    let isHalfGoingDeal = false
+    for (let {time, pool} of prevBuyingPoolList) {
+      // 如果在5分钟以外出现过，则判断为是进行到一般的行情
+      let now = extractedInfo.timeLine.slice(-1)[0]
+      if ((now - time) > 5 * 60 * 1000 && (now - time) < 20 * 60 * 1000 && pool.indexOf(extractedInfo.symbol) > -1) {
+        isHalfGoingDeal=true
+        break
+      }
+    }
+    if (isHalfGoingDeal) {
       continue
     }
 
@@ -183,6 +201,19 @@ function rateAndSort(extractedInfoList, whiteList) {
 function pickTradeFromList(newExtractedInfoList, whiteList){
   let sortedPool = rateAndSort(newExtractedInfoList, whiteList)
   if (sortedPool.length > 0) {
+    let now = sortedPool[0].timeLine.slice(-1)[0]
+    prevBuyingPoolList.push({
+      time: now,
+      pool: sortedPool.map(o => o.symbol)
+    })
+    /**
+     * 如果超过10分钟的，就去掉
+     * */
+    if (now - prevBuyingPoolList[0].time > 15 * 60 * 1000) {
+      console.log('prevBuyingPoolList.unshift()')
+      prevBuyingPoolList.shift()
+    }
+
     log('Picking from list: '.green, sortedPool.map(o => o.symbol).join(' '))
     let pickedTrade
     pickedTrade  = sortedPool[0]

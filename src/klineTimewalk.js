@@ -43,7 +43,7 @@ let {
  * 测试用，lineLength是用来获得24小时vol时用的
  * */
 lineLength = 1 * 24 * 60 / 5//
-KLINE_FILE = `./savedData/klines/klines-simulate-7-4.js`
+KLINE_FILE = `./savedData/klines/klines-simulate-7-5.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
@@ -64,7 +64,7 @@ let tempBuy = '' // used for debugging, 比如设置成 ETH/BTC，production就�
 let cutProfitList = []
 let numberOfPoints = 24 * 60 / 5
 let marketIsGood = false
-
+let lastBoughtSymbol = null
 //-----------------------------------------------------------------------------
 
 function checkValueCriteria(klines, closeLine, openLine) {
@@ -127,7 +127,12 @@ function rateAndSort(extractedInfoList, whiteList) {
      * */
     let newWhiteList = getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList)
 
-//    newWhiteList = [...whiteListSet].slice(0, topVolumeNo)
+    /**
+     * 上个刚刚买入的symbol如果和这个一样，则跳过，不连续买入同一个symbol
+     * */
+//    if (lastBoughtSymbol === extractedInfo.symbol) {
+//      continue
+//    }
 
     if (newWhiteList && newWhiteList.length > 0) {
       if (!newWhiteList.includes(extractedInfo.symbol)) {
@@ -231,13 +236,14 @@ async function useKlineStrategy(params){
    * 用volume来获得volumeWhiteList
    * */
   if (useVolumeToChooseCurrency) {
-    let topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints, 5000)
+    let topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints)
     volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
     //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
 
-    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 6, 5000 / 6)
+    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 6)
     volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-    //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+//    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 6, 5000 / 6)
+//    volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
 
     let overallWhiteList = getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList)
     log(`WhiteList: ${overallWhiteList}`.yellow)
@@ -245,9 +251,9 @@ async function useKlineStrategy(params){
     /*
     * 显示1小时内，除了已经在whiteList里，vol最高的前10
     * */
-    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 24)
+    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 24 / 4)
     topVolume = _.filter(topVolume, o => overallWhiteList.indexOf(o.symbol) === -1).slice(0,10)
-    log(`Top volume 1H: `.yellow + topVolume.map(o => (
+    log(`Top volume 15m: `.yellow + topVolume.map(o => (
       `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green
     )).join(' '))
   }
@@ -423,6 +429,7 @@ async function useKlineStrategy(params){
           newPlotDot.sellPrice = askPrice[0]
         }
 
+        lastBoughtSymbol = lastPickedTrade.symbol
         lastPickedTrade = null
       }
       else {
@@ -581,6 +588,8 @@ async function useKlineStrategy(params){
         log(`Sell ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
         newPlotDot.sellPrice = lastTradeCurrentState.closeLine[klineIndex]
+
+        lastBoughtSymbol = lastPickedTrade.symbol
         lastPickedTrade = null
       } else {
         lastPickedTrade = pickedTrade
@@ -704,7 +713,7 @@ async function timeWalk(extractedInfoList){
 //        console.log('extractedInfoList[0].timeLine.slice(-3)', extractedInfoList[0].timeLine.slice(-3))
 //        console.log('extractedInfoList[0].klines[windows[0]].slice(-3)', extractedInfoList[0].klines[windows[0]].slice(-3))
 //        console.log('extractedInfoList[0].klines[windows[1]].slice(-3)', extractedInfoList[0].klines[windows[1]].slice(-3))
-        log(`It takes ${((new Date().getTime() - fetchStamp)/1000)}s to finish fetching new data`)
+//        log(`It takes ${((new Date().getTime() - fetchStamp)/1000)}s to finish fetching new data`)
 
         klineIndex = extractedInfoList[0].timeLine.length - 1
         if (klineIndex !== numberOfPoints) {
@@ -746,7 +755,7 @@ async function timeWalk(extractedInfoList){
          * */
         if (JSON.stringify(prevExtractedInfoList) === JSON.stringify(extractedInfoList)) {
           //        if (checkInfoChanged(prevExtractedInfoList, extractedInfoList)) {
-          log('No new data, Skip'.green)
+//          log('No new data, Skip'.green)
           continue
         }
         else {

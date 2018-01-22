@@ -20,6 +20,7 @@
     "moment-timezone": "^0.5.14",
     "ololog": "^1.1.78",
     "play-sound": "^1.1.2",
-    "promise-retry": "^1.1.1"
+    "promise-retry": "^1.1.1",
+    "uuid": "^3.2.1"
   }
 }

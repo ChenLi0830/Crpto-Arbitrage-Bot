@@ -5,11 +5,11 @@ module.exports = {
   //const numberOfFetch = 1 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多
   //const windows = [2] // 必须从小到大，maximum = 500 - lineLength
   //const lineLength = 2
-
+  
   interval : '5m',
   intervalInMillesec : 5 * 60 * 1000,
   recordNb : 500, // default = 500, use less for large intervals,
-  numberOfFetch : 5, // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多,
+  numberOfFetch : 1, // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多,
   windows : [4, 16, 99], // 必须从小到大，maximum = 500 - lineLength,
   lineLength : 50,
 
@@ -49,4 +49,20 @@ module.exports = {
       percent: 20,
     },
   ],
+//  dynamicProfitList: [
+////    {
+////      multiplier: 0.15,
+////      percent: 30,
+////    },
+//    {
+//      multiplier: 0.8,
+//      percent: 70,
+//    },
+//    {
+//      multiplier: 2,
+//      percent: 20,
+//    },
+//  ],
+  numberOfPoints: 24 * 60 / 5,
+  padding: 100
 }

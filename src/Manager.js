@@ -173,7 +173,7 @@ module.exports = class Manager {
         console.log('this.workerList', this.workerList)
         this.workerList[0].createCutProfitOrders(this.updateWorkerStateList.bind(this))
       }
-      
+
       break // Todo remove in production
     }
   }

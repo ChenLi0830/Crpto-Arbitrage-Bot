@@ -18,7 +18,7 @@ const TOP_VOLUME_CSV_FILE = './savedData/topVolume.csv'
  * 从klines文件中获得振动最大和BTC Volume最大的币，并保存
  * */
 async function main () {
-  let extractedInfoList = require('../savedData/klines/klines')
+  let ohlcvMAList = require('../savedData/klines/klines')
   let statsInterval = 4 * 60 * 60 * 1000 //'4h'
 
   let startIndex = 0
@@ -27,12 +27,12 @@ async function main () {
   let topVibrateResult = []
   let topVolumeResult = []
 
-  while (startIndex < extractedInfoList[0].timeLine.length) {
-    while (extractedInfoList[0].timeLine[endIndex] - extractedInfoList[0].timeLine[startIndex] < statsInterval) {
+  while (startIndex < ohlcvMAList[0].timeLine.length) {
+    while (ohlcvMAList[0].timeLine[endIndex] - ohlcvMAList[0].timeLine[startIndex] < statsInterval) {
       endIndex++
     }
 
-    let newExtractedInfoList = cutExtractedInfoList (extractedInfoList, startIndex, endIndex - startIndex + 1)
+    let newExtractedInfoList = cutExtractedInfoList(ohlcvMAList, startIndex, endIndex - startIndex + 1)
 
     let newInfoLength = newExtractedInfoList[0].timeLine.length
     let topVibrated = getTopVibrated(newExtractedInfoList, 10, newInfoLength)

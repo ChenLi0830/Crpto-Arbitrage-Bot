@@ -16,11 +16,11 @@ async function main () {
   await manager.start()
   // await manager.loadBalance()
   // await manager.fetchData()
-  // console.log('manager.extractedInfoList.length', manager.extractedInfoList.length)
+  // console.log('manager.ohlcvMAList.length', manager.ohlcvMAList.length)
   // await manager.fetchData()
-  // console.log('manager.extractedInfoList.length', manager.extractedInfoList.length)
+  // console.log('manager.ohlcvMAList.length', manager.ohlcvMAList.length)
   // await manager.fetchData()
-  // console.log('manager.extractedInfoList.length', manager.extractedInfoList.length)
+  // console.log('manager.ohlcvMAList.length', manager.ohlcvMAList.length)
 }
 
 main()

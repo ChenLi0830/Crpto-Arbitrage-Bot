@@ -122,8 +122,8 @@ async function fetchPromiseBySegment(promises, segNumber) {
 //    await api.sleep(intervalInMillesec * 0.6)
     try {
       await exchange.loadMarkets()
-      let extractedInfoList = []
-      let extractedInfo24HList = []
+      let ohlcvMAList = []
+      let ohlcvMA24HList = []
       let lastFetch24HTimeStamp = null
 
       if (process.env.PRODUCTION) {
@@ -171,17 +171,17 @@ async function fetchPromiseBySegment(promises, segNumber) {
             continue
           }
 
-          let extractedInfo = extractOHLCVInfo(ohlcv, symbol)
-          let extractedInfo24H = needUpdate24H ? extractOHLCVInfo(ohlcv24H, symbol) : null
-          extractedInfoList.push(extractedInfo)
-          needUpdate24H && extractedInfo24HList.push(extractedInfo24H)
+          let ohlcvMA = extractOHLCVInfo(ohlcv, symbol)
+          let ohlcvMA24H = needUpdate24H ? extractOHLCVInfo(ohlcv24H, symbol) : null
+          ohlcvMAList.push(ohlcvMA)
+          needUpdate24H && ohlcvMA24HList.push(ohlcvMA24H)
         }
       }
       else {
         let exchange = new ccxt.binance()
         await exchange.loadMarkets()
 
-        extractedInfoList = []
+        ohlcvMAList = []
         for (let symbol of exchange.symbols) {
           //        await api.sleep (exchange.rateLimit)
           let symbolInvalid = false
@@ -224,18 +224,18 @@ async function fetchPromiseBySegment(promises, segNumber) {
               continue
             }
 
-            let extractedInfo = extractOHLCVInfo(ohlcv, symbol)
-            extractedInfoList.push(extractedInfo)
+            let ohlcvMA = extractOHLCVInfo(ohlcv, symbol)
+            ohlcvMAList.push(ohlcvMA)
           }
         }
       }
 
-      log(`klineDataLength ${extractedInfoList[0].klines[windows[0]].length}`)
-      fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(extractedInfoList), 'utf-8')
+      log(`klineDataLength ${ohlcvMAList[0].klines[windows[0]].length}`)
+      fs.writeFileSync(KLINE_FILE, 'module.exports = ' + JSON.stringify(ohlcvMAList), 'utf-8')
       if (needUpdate24H) {
         console.log('needUpdate24H', needUpdate24H)
-        console.log('extractedInfo24HList.length', extractedInfo24HList.length)
-        fs.writeFileSync(KLINE_24H_FILE, 'module.exports = ' + JSON.stringify(extractedInfo24HList), 'utf-8')
+        console.log('ohlcvMA24HList.length', ohlcvMA24HList.length)
+        fs.writeFileSync(KLINE_24H_FILE, 'module.exports = ' + JSON.stringify(ohlcvMA24HList), 'utf-8')
         needUpdate24H = false
       }
     } catch (e) {

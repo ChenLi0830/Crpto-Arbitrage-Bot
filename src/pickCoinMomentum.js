@@ -46,25 +46,25 @@ let whiteList = []
 /**
  * 从ExtractedInfoList里截取出对应长度的
  * */
-function cutExtractedInfoList (extractedInfoList, start, lineLength) {
-  let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
+function cutExtractedInfoList (ohlcvMAList, start, lineLength) {
+  let newExtractedInfoList = ohlcvMAList.map(ohlcvMA => {
     /** newKlines - length==lineLength */
     let newKlines = {}
-    Object.keys(extractedInfo.klines).forEach(key => {
-      newKlines[key] = extractedInfo.klines[key].slice(start, start + lineLength)
+    Object.keys(ohlcvMA.klines).forEach(key => {
+      newKlines[key] = ohlcvMA.klines[key].slice(start, start + lineLength)
     })
     /** newVolumes */
-    let newVolumes = extractedInfo.volumeLine.slice(start, start + lineLength)
+    let newVolumes = ohlcvMA.volumeLine.slice(start, start + lineLength)
     /** newPrices */
-    let newCloseLine = extractedInfo.closeLine.slice(start, start + lineLength)
-    let newOpenLine = extractedInfo.openLine.slice(start, start + lineLength)
-    let newHighLine = extractedInfo.highLine.slice(start, start + lineLength)
-    let newLowLine = extractedInfo.lowLine.slice(start, start + lineLength)
+    let newCloseLine = ohlcvMA.closeLine.slice(start, start + lineLength)
+    let newOpenLine = ohlcvMA.openLine.slice(start, start + lineLength)
+    let newHighLine = ohlcvMA.highLine.slice(start, start + lineLength)
+    let newLowLine = ohlcvMA.lowLine.slice(start, start + lineLength)
     /** newTimes */
-    let newTimes = extractedInfo.timeLine.slice(start, start + lineLength)
+    let newTimes = ohlcvMA.timeLine.slice(start, start + lineLength)
 
     return {
-      ...extractedInfo,
+      ...ohlcvMA,
       klines: newKlines,
       volumeLine: newVolumes,
       closeLine: newCloseLine,
@@ -91,11 +91,11 @@ function checkVolCriteria(volumeLine){
   return isVolumeIncreaseFast && isVolumeHigherThanAvg
 }
 
-function checkBuyingCriteria(extractedInfo) {
-  const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
+function checkBuyingCriteria(ohlcvMA) {
+  const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = ohlcvMA
   let matchVolCriteria = checkVolCriteria(volumeLine)
   let isPricesHigherThanPrevPoint = (closeLine[lineLength - 1] > closeLine[lineLength - 2]) && (openLine[lineLength - 1] > openLine[lineLength - 2])
-  let isVibrateEnough = extractedInfo.vibrateValue > 50
+  let isVibrateEnough = ohlcvMA.vibrateValue > 50
 
   let currentPoint = lineLength-1
   let prevPoint = lineLength-2
@@ -116,32 +116,32 @@ function rateCurrency(klines, volumeLine) {
   return rate
 }
 
-function rateAndSort(extractedInfoList, whiteList) {
+function rateAndSort(ohlcvMAList, whiteList) {
   let buyingPool = []
 
-  for (let extractedInfo of extractedInfoList) {
+  for (let ohlcvMA of ohlcvMAList) {
     /**
      * 白名单过滤
      * */
     if (whiteList && whiteList.length > 0) {
-      if (!whiteList.includes(extractedInfo.symbol)) {
+      if (!whiteList.includes(ohlcvMA.symbol)) {
         continue
       }
     }
     /**
      * 若无白名单，则选择振动最强的
      * */
-    else if (vibrateWhiteList && vibrateWhiteList.length > 0 && !vibrateWhiteList.includes(extractedInfo.symbol)) {
+    else if (vibrateWhiteList && vibrateWhiteList.length > 0 && !vibrateWhiteList.includes(ohlcvMA.symbol)) {
       continue
     }
 
-    const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
-    let matchBuyingCriteria = checkBuyingCriteria(extractedInfo)
+    const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = ohlcvMA
+    let matchBuyingCriteria = checkBuyingCriteria(ohlcvMA)
 
     if (matchBuyingCriteria) {
       let rate = rateCurrency(klines, volumeLine)
 
-      buyingPool.push({...extractedInfo, rate})
+      buyingPool.push({...ohlcvMA, rate})
     }
   }
 
@@ -284,15 +284,15 @@ function useVolumeStrategy(params) {
   return {lastPickedTradeList, money, newPlotDot}
 }
 
-function timeWalkCalcProfit(extractedInfoList){
+function timeWalkCalcProfit(ohlcvMAList){
   let shift = 0
   let money = 100
   let lastPickedTrade = null // for kline strategy
   let lastPickedTradeList = [] // for volume strategy
   let plot = []//{time, value, event, profit, rate, BTCvolume}
 
-  while (shift + lineLength < extractedInfoList[0].volumeLine.length) {
-    let newExtractedInfoList = cutExtractedInfoList (extractedInfoList, shift, lineLength)
+  while (shift + lineLength < ohlcvMAList[0].volumeLine.length) {
+    let newExtractedInfoList = cutExtractedInfoList (ohlcvMAList, shift, lineLength)
     let timeEpoch = newExtractedInfoList[0].timeLine[lineLength-1]
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
@@ -322,9 +322,9 @@ function timeWalkCalcProfit(extractedInfoList){
 //  /**
 //   * TimeWalk simulation
 //   * */
-//  const extractedInfoList = require(`.${KLINE_FILE}`)
+//  const ohlcvMAList = require(`.${KLINE_FILE}`)
 //  try {
-//    timeWalk(extractedInfoList)
+//    timeWalk(ohlcvMAList)
 //  } catch (error) {
 //    console.error(error)
 //    log(error.message.red)

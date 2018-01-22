@@ -78,19 +78,20 @@ function extractOHLCVInfo(klineList, symbol) {
 }
 
 function formatKlineList(klineListOfSymbols, symbols, numberOfPoints) {
-  let extractedInfoList = []
+  let ohlcvMAList = []
   klineListOfSymbols.forEach((klineList, i)=>{
     let symbol = symbols[i]
     if (klineList.length < numberOfPoints - 1){
 //      console.log(`symbol ${symbol} doesn't have that much history data, skipping it`)
-    }
-    else {
-      let extractedInfo = extractOHLCVInfo(klineList, symbol)
+    } else {
+      console.log('klineList', klineList.slice(0, 3))
+      process.exit()
+      let ohlcvMA = extractOHLCVInfo(klineList, symbol)
 
-      extractedInfoList.push(extractedInfo)
+      ohlcvMAList.push(ohlcvMA)
     }
   })
-  return extractedInfoList
+  return ohlcvMAList
 }
 
 async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, endTo) {
@@ -120,9 +121,9 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
       klineList = klineList.map(symbolKlines => symbolKlines.slice(-numberOfPoints))
     }
 
-    let extractedInfoList = formatKlineList(klineList, symbols, numberOfPoints)
+    let ohlcvMAList = formatKlineList(klineList, symbols, numberOfPoints)
 
-    return extractedInfoList
+    return ohlcvMAList
   }
   catch (error) {
     console.log(error)

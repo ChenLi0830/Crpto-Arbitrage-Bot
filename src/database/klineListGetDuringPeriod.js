@@ -84,8 +84,6 @@ function formatKlineList(klineListOfSymbols, symbols, numberOfPoints) {
     if (klineList.length < numberOfPoints - 1){
 //      console.log(`symbol ${symbol} doesn't have that much history data, skipping it`)
     } else {
-      console.log('klineList', klineList.slice(0, 3))
-      process.exit()
       let ohlcvMA = extractOHLCVInfo(klineList, symbol)
 
       ohlcvMAList.push(ohlcvMA)
@@ -94,9 +92,27 @@ function formatKlineList(klineListOfSymbols, symbols, numberOfPoints) {
   return ohlcvMAList
 }
 
+function formatKlines (klines) {
+  if (klines.length === 0) return {}
+
+  let ohlcv = {}
+  ohlcv.symbol = klines[0].symbol
+  ohlcv.exchange = klines[0].exchange
+  ohlcv.data = klines.map(kline => {
+    return {
+      open: kline.open,
+      high: kline.high,
+      low: kline.low,
+      close: kline.close,
+      volume: kline.volume,
+      timeStamp: kline.timeStamp
+    }
+  })
+  return ohlcv
+}
+
 async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, endTo) {
   try {
-
     if (typeof endTo !== 'number') endTo = new Date().getTime()
     /**
      * 保证endTo不会正好等于要获取点的timeStamp，避免多获取一个点
@@ -110,22 +126,23 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
 
     let promises = symbols.map(symbol => {
       return klineGetDuringPeriod(exchangeId, symbol, startFrom, endTo)
+      .then(klines => {
+        return formatKlines(klines)
+      })
     })
 
-    let klineList = await Promise.all(promises)
+    let ohlcvList = await Promise.all(promises)
 
     /**
      * 如果多获取了一个点，则截掉
      * */
-    if (klineList[0].length > numberOfPoints) {
-      klineList = klineList.map(symbolKlines => symbolKlines.slice(-numberOfPoints))
+    if (ohlcvList[0].data.length > numberOfPoints) {
+      ohlcvList.forEach(symbolKlines => { symbolKlines.data = symbolKlines.data.slice(-numberOfPoints) })
     }
 
-    let ohlcvMAList = formatKlineList(klineList, symbols, numberOfPoints)
-
-    return ohlcvMAList
-  }
-  catch (error) {
+    // let ohlcvMAList = formatKlineList(ohlcvList, symbols, numberOfPoints)
+    return ohlcvList
+  } catch (error) {
     console.log(error)
     return []
   }

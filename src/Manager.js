@@ -27,7 +27,9 @@ const {
   addBTCVolValue,
   generateCutProfitList,
   addPaddingExtractedInfoList,
-  fetchNewPointAndAttach
+  fetchNewPointAndAttach,
+  calcMovingAverge,
+  logSymbolsBasedOnVolPeriod
 } = utils
 
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
@@ -38,9 +40,9 @@ module.exports = class Manager {
       numberOfPoints,
       padding,
       windows,
-      useVolAsCriteria,
-      whiteList,
-      blackList,
+      useVolAsCriteria = true,
+      whiteList = [],
+      blackList = [],
       longVolSymbolNo = 10, // 用长期vol选多少个候选币
       shortVolSymbolNo = 2, // 用短期vol选多少个候选币
       longVolWindow = 24 * 60 / 5,
@@ -55,9 +57,11 @@ module.exports = class Manager {
     this.numberOfPoints = numberOfPoints
     this.padding = padding
     this.windows = windows
-    this.useVolAsCriteria = useVolAsCriteria
     this.whiteList = whiteList
     this.blackList = blackList
+
+    // Vol相关
+    this.useVolAsCriteria = useVolAsCriteria
     this.longVolSymbolNo = longVolSymbolNo
     this.shortVolSymbolNo = shortVolSymbolNo
     this.longVolWindow = longVolWindow
@@ -77,7 +81,7 @@ module.exports = class Manager {
    * @param {*} id
    * @param {*} args
    */
-  updateWorkerStateList (id, args) {
+  updateWorkerList (id, args) {
     console.log('id, args', id, args)
     let worker = _.find(this.workerList, {id})
 
@@ -105,12 +109,13 @@ module.exports = class Manager {
     if (!this.ohlcvMAList || !this.ohlcvMAList.length) {
       await this.exchange.loadMarkets()
       let symbols = _.filter(this.exchange.symbols, symbol => symbol.endsWith('BTC'))
-      this.ohlcvMAList = await klineListGetDuringPeriod(this.exchangeId, symbols, this.numberOfPoints + this.padding)
+      return klineListGetDuringPeriod(this.exchangeId, symbols, this.numberOfPoints + this.padding)
+    } else {
+      /**
+       * 后续fetch，仅获取更新的数据
+       */
+      return fetchNewPointAndAttach(this.ohlcvMAList, this.exchangeId, this.windows)
     }
-    /**
-     * 后续fetch，仅获取更新的数据
-     */
-    this.ohlcvMAList = await fetchNewPointAndAttach(this.ohlcvMAList, this.exchangeId, this.windows)
   }
 
   async buyCurrency (symbol) {
@@ -130,48 +135,36 @@ module.exports = class Manager {
 
   _pickSymbolFromMarket () {
     if (this.useVolAsCriteria) {
-      let topVolume = getTopVolume(this.ohlcvMAList, undefined, this.numberOfPoints)
-      let volumeWhiteListLong = (topVolume).map(o => `${o.symbol}`)
-      //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+      let topVolumeList = getTopVolume(this.ohlcvMAList, undefined, this.longVolWindow)
+      let volumeWhiteListLong = (topVolumeList).map(o => `${o.symbol}`)
 
-      topVolume = getTopVolume(this.ohlcvMAList, undefined, this.numberOfPoints / 6)
-      let volumeWhiteListShort = (topVolume).map(o => `${o.symbol}`)
-  //    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 6, 5000 / 6)
-  //    volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+      topVolumeList = getTopVolume(this.ohlcvMAList, undefined, this.shortVolWindow)
+      let volumeWhiteListShort = (topVolumeList).map(o => `${o.symbol}`)
 
       this.symbolPool = this._getWhiteList(this.whiteList, volumeWhiteListLong, volumeWhiteListShort, this.blackList)
       log(`symbolPool: ${this.symbolPool}`.yellow)
     }
-  }
 
-  /**
-   * 显示过去时间，除了已经在whiteList里vol活跃度最高的币
-   * @param {number} window 用多少个k线点来判断最高流量
-   * @param {integer} symbolNumber 显示多少个币
-   * @param {number} [threshold] 超过这个threshold才会显示
-   */
-  logSymbolsBasedOnVolPeriod (window, symbolNumber, threshold) {
-    /*
-      * 显示除了已经在whiteList里，vol最高的前10
-      * */
-    let topVolume = getTopVolume(this.ohlcvMAList, undefined, window, threshold)
-    topVolume = _.filter(topVolume, o => this.symbolPool.indexOf(o.symbol) === -1).slice(0, symbolNumber)
-
-    log(`Top volume ${symbolNumber * 5} mins: `.yellow + topVolume.map(o => (
-      `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green
-    )).join(' '))
+    // todo 检查价格和其他条件，是否该买
   }
 
   async start () {
     while (true) {
-      await this.fetchData()
-      this.logSymbolsBasedOnVolPeriod(this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold)
-
-      let pickedSymbol = _pickSymbolFromMarket()// 检查是否有该买的currency
-      if (pickedSymbol) {
-        this.buyCurrency('ETH/BTC')
-        console.log('this.workerList', this.workerList)
-        this.workerList[0].createCutProfitOrders(this.updateWorkerStateList.bind(this))
+      try {
+        let ohlcvList = await this.fetchData()
+        this.ohlcvMAList = calcMovingAverge(ohlcvList, this.windows)
+        // console.log('this.ohlcvMAList.length', this.ohlcvMAList.length)
+        // // console.log('this.ohlcvMAList[0]', Object.keys(this.ohlcvMAList[0]))
+        // process.exit()
+        logSymbolsBasedOnVolPeriod(this.ohlcvMAList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
+        let pickedSymbol = this._pickSymbolFromMarket()// 检查是否有该买的currency
+        if (pickedSymbol) {
+          this.buyCurrency('ETH/BTC')
+          console.log('this.workerList', this.workerList)
+          this.workerList[0].createCutProfitOrders(this.updateWorkerStateList.bind(this))
+        }
+      } catch (error) {
+        console.log(error)
       }
 
       break // Todo remove in production

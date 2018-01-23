@@ -1,5 +1,6 @@
 const log = require('ololog').configure({locate: false})
 require('ansicolor').nice
+const _ = require('lodash')
 const {
   generateCutProfitList,
   retryMutationTaskIfTimeout,
@@ -30,9 +31,8 @@ module.exports = class Worker {
 
     let askedPriceHigh = weightedPrices.tradePrice
     let weightedPrice = weightedPrices.avgPrice
-
-    log(`--- Buy in ${this.symbol} at ${weightedPrice} with BTCAmount ${this.BTCAmount}`.blue)
-    log('last 4 close prices', ohlcvMAs.data.slice(-4).join('\n'))
+    log(`--- Start Task: Worker for ${this.symbol} is buying at ${weightedPrice} with BTCAmount ${this.BTCAmount}`.blue)
+    log('last 4 close prices\n', ohlcvMAs.data.slice(-4).map(o => JSON.stringify(o)).join('\n'))
 
     player.play('./src/Glass.aiff', (err) => {
       if (err) throw err
@@ -81,7 +81,7 @@ module.exports = class Worker {
 
     this.buyPrice = weightedPrice
     this.currencyAmount = boughtAmount
-    log(`Worker finish buying ${this.currencyAmount} ${this.symbol} at the price: ${this.buyPrice}; Total BTC of this worker: ${this.BTCAmount}`)
+    log(`--- Finished task: Worker finish buying ${this.currencyAmount} ${this.symbol} at the price: ${this.buyPrice}; Total BTC of this worker: ${this.BTCAmount}`.green)
   }
 
   marketSell (sellAmount) {
@@ -102,6 +102,8 @@ module.exports = class Worker {
         throw new Error(`CreateCutProfitOrders: must buy symbol first`)
       }
       let cutProfitList = generateCutProfitList(ohlcvMAs, 60 / 5, this.dynamicProfitList)
+
+      log(`--- Start Task: Worker for ${this.symbol} is creating limit sell orders`.green)
 
       let createLimitOrderPromises = cutProfitList.map(cutProfit => {
         let cutAmount = this.currencyAmount * cutProfit.percent / 100
@@ -126,7 +128,7 @@ module.exports = class Worker {
 
       this.limitOrders = limitOrders
 
-      log(`Worker finished creating limit orders ${JSON.stringify(limitOrders)}`)
+      log(`--- Finished task: Worker for ${this.symbol} finished creating limit orders ${JSON.stringify(limitOrders)}`.green)
     } catch (error) {
       console.log(error)
     }
@@ -135,7 +137,33 @@ module.exports = class Worker {
   /**
    * 取消止盈单
    */
-  cancelCutProfitOrders () {
+  async cancelCutProfitOrders () {
+    log(`--- Start Task: Worker for ${this.symbol} is cancelling limit sell orders`.green)
+    /*
+    * 查看limit order的filled amount
+    * */
+    let fetchedOrders = await retryQueryTaskIfAnyError(this.exchange, 'fetchOrders', [this.symbol])
+    let filledAmount = 0
+    for (let limitOrder of this.limitOrders) {
+      let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
+      if (currentOrderStatus.status === 'closed') { // 止盈order被filled了
+        filledAmount += limitOrder.amount
+      }
+      else if (currentOrderStatus.status === 'open') { // 止盈order未被filled，或被filled一部分
+        filledAmount += Math.min(currentOrderStatus.filled, limitOrder.amount) // filled是safeFloat，可能跟实际值有出入
+      }
+    }
+    log(`Total filledAmount ${filledAmount}`)
+    /**
+     * 取消被程序创建且当前为open的order
+     * */
+    let orderIds = []
+    fetchedOrders.forEach(obj => obj.status === 'open' && orderIds.push(obj.id))
+    orderIds = _.filter(orderIds, id => this.limitOrders.map(order => order.id).indexOf(id) > -1)
 
+    let cancelOrderPromises = orderIds.map(orderId => retryMutationTaskIfTimeout(this.exchange, 'cancelOrder', [orderId, this.symbol, {'recvWindow': 60*10*1000}]))
+
+    let results = await Promise.all(cancelOrderPromises)
+    log(`--- Finished task: Worker for ${this.symbol} finished cancelling open orders`.green)
   }
 }

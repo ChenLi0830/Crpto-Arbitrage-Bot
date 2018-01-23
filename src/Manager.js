@@ -1,5 +1,3 @@
-import { workers } from 'cluster';
-
 // 'use strict'
 const ccxt = require('ccxt')
 const asciichart = require('asciichart')

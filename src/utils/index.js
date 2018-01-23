@@ -89,30 +89,30 @@ async function retryQueryTaskIfAnyError (exchange, func, args = []) {
 /**
  * 为ExtractedInfoList 从开始处添加padding
  * */
-function addPaddingExtractedInfoList (ohlcvMAList, paddingLength = 1) {
+function addPaddingExtractedInfoList (ohlcvMAsList, paddingLength = 1) {
   let paddingList = []
   for (let i = 0; i < paddingLength; i++) {
     paddingList.push(0)
   }
 
-  let newExtractedInfoList = ohlcvMAList.map(ohlcvMA => {
+  let newExtractedInfoList = ohlcvMAsList.map(ohlcvMAs => {
     /** newKlines - length==lineLength */
     let newKlines = {}
-    Object.keys(ohlcvMA.klines).forEach(key => {
-      newKlines[key] = [...paddingList, ...ohlcvMA.klines[key]]
+    Object.keys(ohlcvMAs.klines).forEach(key => {
+      newKlines[key] = [...paddingList, ...ohlcvMAs.klines[key]]
     })
     /** newVolumes */
-    let newVolumes = [...paddingList, ...ohlcvMA.volumeLine]
+    let newVolumes = [...paddingList, ...ohlcvMAs.volumeLine]
     /** newPrices */
-    let newCloseLine = [...paddingList, ...ohlcvMA.closeLine]
-    let newOpenLine = [...paddingList, ...ohlcvMA.openLine]
-    let newHighLine = [...paddingList, ...ohlcvMA.highLine]
-    let newLowLine = [...paddingList, ...ohlcvMA.lowLine]
+    let newCloseLine = [...paddingList, ...ohlcvMAs.closeLine]
+    let newOpenLine = [...paddingList, ...ohlcvMAs.openLine]
+    let newHighLine = [...paddingList, ...ohlcvMAs.highLine]
+    let newLowLine = [...paddingList, ...ohlcvMAs.lowLine]
     /** newTimes */
-    let newTimes = [...paddingList, ...ohlcvMA.timeLine]
+    let newTimes = [...paddingList, ...ohlcvMAs.timeLine]
 
     return {
-      ...ohlcvMA,
+      ...ohlcvMAs,
       klines: newKlines,
       volumeLine: newVolumes,
       closeLine: newCloseLine,
@@ -128,25 +128,25 @@ function addPaddingExtractedInfoList (ohlcvMAList, paddingLength = 1) {
 /**
  * 从ExtractedInfoList里截取出对应长度的
  * */
-function cutExtractedInfoList (ohlcvMAList, start, lineLength) {
-  let newExtractedInfoList = ohlcvMAList.map(ohlcvMA => {
+function cutExtractedInfoList (ohlcvMAsList, start, lineLength) {
+  let newExtractedInfoList = ohlcvMAsList.map(ohlcvMAs => {
     /** newKlines - length==lineLength */
     let newKlines = {}
-    Object.keys(ohlcvMA.klines).forEach(key => {
-      newKlines[key] = ohlcvMA.klines[key].slice(start, start + lineLength)
+    Object.keys(ohlcvMAs.klines).forEach(key => {
+      newKlines[key] = ohlcvMAs.klines[key].slice(start, start + lineLength)
     })
     /** newVolumes */
-    let newVolumes = ohlcvMA.volumeLine.slice(start, start + lineLength)
+    let newVolumes = ohlcvMAs.volumeLine.slice(start, start + lineLength)
     /** newPrices */
-    let newCloseLine = ohlcvMA.closeLine.slice(start, start + lineLength)
-    let newOpenLine = ohlcvMA.openLine.slice(start, start + lineLength)
-    let newHighLine = ohlcvMA.highLine.slice(start, start + lineLength)
-    let newLowLine = ohlcvMA.lowLine.slice(start, start + lineLength)
+    let newCloseLine = ohlcvMAs.closeLine.slice(start, start + lineLength)
+    let newOpenLine = ohlcvMAs.openLine.slice(start, start + lineLength)
+    let newHighLine = ohlcvMAs.highLine.slice(start, start + lineLength)
+    let newLowLine = ohlcvMAs.lowLine.slice(start, start + lineLength)
     /** newTimes */
-    let newTimes = ohlcvMA.timeLine.slice(start, start + lineLength)
+    let newTimes = ohlcvMAs.timeLine.slice(start, start + lineLength)
 
     return {
-      ...ohlcvMA,
+      ...ohlcvMAs,
       klines: newKlines,
       volumeLine: newVolumes,
       closeLine: newCloseLine,
@@ -159,18 +159,18 @@ function cutExtractedInfoList (ohlcvMAList, start, lineLength) {
   return newExtractedInfoList
 }
 
-function addVibrateValue (ohlcvMAList, observeLength) {
-  for (let ohlcvMA of ohlcvMAList) {
-    let meanClose = _.mean(ohlcvMA.closeLine)
+function addVibrateValue (ohlcvMAsList, observeLength) {
+  for (let ohlcvMAs of ohlcvMAsList) {
+    let meanClose = _.mean(ohlcvMAs.closeLine)
     let totalSquareError = 0
-    let infoLength = ohlcvMA.closeLine.length
+    let infoLength = ohlcvMAs.closeLine.length
     let vibrateValue = 0
 //    for (let i=Math.max(infoLength - observeLength + 1, 0); i<infoLength; i++) {
     for (let i = infoLength - observeLength + 1; i < infoLength; i++) {
       /**
        * 只看增长部分
        * */
-//      let increaseValue = (ohlcvMA.closeLine[i] - ohlcvMA.closeLine[i-1]) / ohlcvMA.closeLine[i-1]
+//      let increaseValue = (ohlcvMAs.closeLine[i] - ohlcvMAs.closeLine[i-1]) / ohlcvMAs.closeLine[i-1]
 //      if (increaseValue > 0) {
 //        vibrateValue += increaseValue
 //      }
@@ -178,21 +178,21 @@ function addVibrateValue (ohlcvMAList, observeLength) {
        * 均方差
        * */
 //      console.log('meanClose', meanClose)
-//      if (ohlcvMA.closeLine[i] === undefined) {
+//      if (ohlcvMAs.closeLine[i] === undefined) {
 //        console.log('i', i)
 //      }
-      totalSquareError = totalSquareError + Math.pow((ohlcvMA.closeLine[i] - meanClose) / meanClose, 2)
+      totalSquareError = totalSquareError + Math.pow((ohlcvMAs.closeLine[i] - meanClose) / meanClose, 2)
     }
-    ohlcvMA.vibrateValue = vibrateValue
-    ohlcvMA.meanSquareError = totalSquareError / observeLength
-//    console.log('ohlcvMA.meanSquareError', ohlcvMA.meanSquareError)
+    ohlcvMAs.vibrateValue = vibrateValue
+    ohlcvMAs.meanSquareError = totalSquareError / observeLength
+//    console.log('ohlcvMAs.meanSquareError', ohlcvMAs.meanSquareError)
   }
-  return ohlcvMAList
+  return ohlcvMAsList
 }
 
-function addWeightValue (ohlcvMAList, observeLength) {
-  for (let ohlcvMA of ohlcvMAList) {
-    let profitLine = timeWalkCalcProfit([ohlcvMA])
+function addWeightValue (ohlcvMAsList, observeLength) {
+  for (let ohlcvMAs of ohlcvMAsList) {
+    let profitLine = timeWalkCalcProfit([ohlcvMAs])
 
     let weight = 0
     let momentum = 0
@@ -240,38 +240,38 @@ function addWeightValue (ohlcvMAList, observeLength) {
         process.exit()
       }
     }
-    ohlcvMA.weightValue = weight
+    ohlcvMAs.weightValue = weight
   }
-  return ohlcvMAList
+  return ohlcvMAsList
 }
 
 /**
  * 获得最高势能（稳增+阶跃）的几个币
  * */
-function getTopWeighted (ohlcvMAList, topWeightNo, observeWindow = 7 * 24 * 60 / 5) {
-  ohlcvMAList = addWeightValue(ohlcvMAList, observeWindow)
+function getTopWeighted (ohlcvMAsList, topWeightNo, observeWindow = 7 * 24 * 60 / 5) {
+  ohlcvMAsList = addWeightValue(ohlcvMAsList, observeWindow)
 
-  let sortedExtractedInfoList = _.sortBy(ohlcvMAList, obj => -obj.weightValue)
+  let sortedExtractedInfoList = _.sortBy(ohlcvMAsList, obj => -obj.weightValue)
   return sortedExtractedInfoList.slice(0, topWeightNo)
 }
 
 /**
  * Get top vibrated
  * */
-function getTopVibrated (ohlcvMAList, topVibratedNo, observeWindow = 50) {
-  ohlcvMAList = addVibrateValue(ohlcvMAList, observeWindow)
+function getTopVibrated (ohlcvMAsList, topVibratedNo, observeWindow = 50) {
+  ohlcvMAsList = addVibrateValue(ohlcvMAsList, observeWindow)
 
-//  console.log('ohlcvMAList', ohlcvMAList.map(o => `${o.symbol} ${o.meanSquareError}`))
+//  console.log('ohlcvMAsList', ohlcvMAsList.map(o => `${o.symbol} ${o.meanSquareError}`))
 
-  let sortedExtractedInfoList = _.sortBy(ohlcvMAList, obj => obj.meanSquareError)
+  let sortedExtractedInfoList = _.sortBy(ohlcvMAsList, obj => obj.meanSquareError)
 
 //  console.log('sortedExtractedInfoList', sortedExtractedInfoList.map(o => `${o.symbol} ${o.meanSquareError}`))
 
   return sortedExtractedInfoList.slice(0, topVibratedNo)
 }
 
-function addBTCVolValue (ohlcvMAList, observeWindow) {
-  for (let ohlcvMAs of ohlcvMAList) {
+function addBTCVolValue (ohlcvMAsList, observeWindow) {
+  for (let ohlcvMAs of ohlcvMAsList) {
     // console.log('ohlcvMAs', ohlcvMAs)
     let infoLength = ohlcvMAs.data.length
     let totalVolume = 0
@@ -284,22 +284,22 @@ function addBTCVolValue (ohlcvMAList, observeWindow) {
     }
     ohlcvMAs.BTCVolume = totalVolume
   }
-  return ohlcvMAList
+  return ohlcvMAsList
 }
 
 /**
  * 显示过去时间，除了已经在exceptList里vol活跃度最高的币
- * @param {*} ohlcvMAList
+ * @param {*} ohlcvMAsList
  * @param {number} observeWindow 用多少个k线点来判断最高流量
  * @param {integer} symbolNumber 显示多少个币
  * @param {number} [threshold] 超过这个threshold才会显示
  * @param {[*]} [exceptList] 如果有exceptList，则只会显示排除exceptList之外的
  */
-function logSymbolsBasedOnVolPeriod (ohlcvMAList, observeWindow, symbolNumber, threshold, exceptList) {
+function logSymbolsBasedOnVolPeriod (ohlcvMAsList, observeWindow, symbolNumber, threshold, exceptList) {
     /*
     * 显示除了已经在whiteList里，vol最高的前10
     * */
-  let topVolumeList = getTopVolume(ohlcvMAList, undefined, observeWindow, threshold)
+  let topVolumeList = getTopVolume(ohlcvMAsList, undefined, observeWindow, threshold)
   if (exceptList && exceptList.length > 0) {
     topVolumeList = _.filter(topVolumeList, o => exceptList.indexOf(o.symbol) === -1)
   }
@@ -313,26 +313,22 @@ function logSymbolsBasedOnVolPeriod (ohlcvMAList, observeWindow, symbolNumber, t
 /**
  * Get Top Volume
  * */
-function getTopVolume (ohlcvMAList, topVolumeNo = undefined, observeWindow = 50, volumeThreshold = undefined) {
-  ohlcvMAList = addBTCVolValue(ohlcvMAList, observeWindow)
-  let sortedExtractedInfoList = _.sortBy(ohlcvMAList, obj => -obj.BTCVolume)
+function getTopVolume (ohlcvMAsList, topVolumeNo = undefined, observeWindow = 50, volumeThreshold = undefined) {
+  ohlcvMAsList = addBTCVolValue(ohlcvMAsList, observeWindow)
+  let sortedExtractedInfoList = _.sortBy(ohlcvMAsList, obj => -obj.BTCVolume)
   if (volumeThreshold) {
     sortedExtractedInfoList = _.filter(sortedExtractedInfoList, obj => (obj.BTCVolume > volumeThreshold))
   }
   return sortedExtractedInfoList.slice(0, topVolumeNo)
 }
 
-function generateCutProfitList (ohlcvMA, observeWindow, dynamicProfitList) {
+function generateCutProfitList (ohlcvMAs, observeWindow, dynamicProfitList) {
   let totalChange = 0
-  let highLine = ohlcvMA.highLine.slice(-observeWindow)
-  let lowLine = ohlcvMA.lowLine.slice(-observeWindow)
-  let openLine = ohlcvMA.openLine.slice(-observeWindow)
-  let closeLine = ohlcvMA.closeLine.slice(-observeWindow)
-  let accumulatedProfit = 0
-
-  for (let i = 0; i < openLine.length; i++) {
-    totalChange += (100 * (highLine[i] - lowLine[i]) / openLine[i])
-    accumulatedProfit += (100 * (closeLine[i] - openLine[i]) / openLine[i])
+  let end = ohlcvMAs.data.length - 1
+  let start = ohlcvMAs.data.length - observeWindow
+  for (let i = start; i <= end; i++) {
+    let {high, low, open} = ohlcvMAs.data[i]
+    totalChange += (100 * (high - low) / open)
   }
   let avgChange = totalChange / observeWindow
 
@@ -362,36 +358,36 @@ function printLine (lineData) {
   log.yellow('\n' + chart, '\n')
 }
 
-async function fetchNewPointAndAttach (ohlcvMAList, exchangeId, windows) {
+async function fetchNewPointAndAttach (ohlcvMAsList, exchangeId, windows) {
   /**
    * fetch 两个新点，并更新ohlcvMAList
    * */
-  let symbols = ohlcvMAList.map(o => o.symbol)
+  let symbols = ohlcvMAsList.map(o => o.symbol)
   let newPointsList = await klineListGetDuringPeriod(exchangeId, symbols, 2)
-  let sliceEnd = ohlcvMAList[0].timeLine.length - 2
+  let sliceEnd = ohlcvMAsList[0].timeLine.length - 2
 
-  let updatedInfoList = ohlcvMAList.map(ohlcvMA => {
+  let updatedInfoList = ohlcvMAsList.map(ohlcvMAs => {
     // 更新2点，保证前面点的close值为exchange最终值
-    let newPoints = _.find(newPointsList, {symbol: ohlcvMA.symbol})
+    let newPoints = _.find(newPointsList, {symbol: ohlcvMAs.symbol})
 
     /**
      * 当ohlcvMA的最后一个点未更新完毕，则保留点 0 - length-3，最后两点更新
      * 当ohlcvMA的最后一个点更新完毕时，则保留点 1 - length-2
      * 利用shift完成
      * */
-    let shift = ohlcvMA.timeLine.slice(-1)[0] !== newPoints.timeLine.slice(-1)[0] ? 1 : 0
-//    console.log('ohlcvMA.closeLine.slice(-5)', ohlcvMA.closeLine.slice(-5))
-//    console.log('ohlcvMA.closeLine.slice(shift, sliceEnd + shift).slice(-3))', ohlcvMA.closeLine.slice(shift, sliceEnd + shift).slice(-3))
+    let shift = ohlcvMAs.timeLine.slice(-1)[0] !== newPoints.timeLine.slice(-1)[0] ? 1 : 0
+//    console.log('ohlcvMAs.closeLine.slice(-5)', ohlcvMAs.closeLine.slice(-5))
+//    console.log('ohlcvMAs.closeLine.slice(shift, sliceEnd + shift).slice(-3))', ohlcvMAs.closeLine.slice(shift, sliceEnd + shift).slice(-3))
 //    console.log('newPoints.closeLine.slice(-2)', newPoints.closeLine.slice(-2))
 //    process.exit()
     let updatedInfo = {
-      ...ohlcvMA,
-      volumeLine: [...(ohlcvMA.volumeLine.slice(shift, sliceEnd + shift)), ...newPoints.volumeLine.slice(-2)],
-      closeLine: [...(ohlcvMA.closeLine.slice(shift, sliceEnd + shift)), ...newPoints.closeLine.slice(-2)],
-      openLine: [...(ohlcvMA.openLine.slice(shift, sliceEnd + shift)), ...newPoints.openLine.slice(-2)],
-      highLine: [...(ohlcvMA.highLine.slice(shift, sliceEnd + shift)), ...newPoints.highLine.slice(-2)],
-      lowLine: [...(ohlcvMA.lowLine.slice(shift, sliceEnd + shift)), ...newPoints.lowLine.slice(-2)],
-      timeLine: [...(ohlcvMA.timeLine.slice(shift, sliceEnd + shift)), ...newPoints.timeLine.slice(-2)]
+      ...ohlcvMAs,
+      volumeLine: [...(ohlcvMAs.volumeLine.slice(shift, sliceEnd + shift)), ...newPoints.volumeLine.slice(-2)],
+      closeLine: [...(ohlcvMAs.closeLine.slice(shift, sliceEnd + shift)), ...newPoints.closeLine.slice(-2)],
+      openLine: [...(ohlcvMAs.openLine.slice(shift, sliceEnd + shift)), ...newPoints.openLine.slice(-2)],
+      highLine: [...(ohlcvMAs.highLine.slice(shift, sliceEnd + shift)), ...newPoints.highLine.slice(-2)],
+      lowLine: [...(ohlcvMAs.lowLine.slice(shift, sliceEnd + shift)), ...newPoints.lowLine.slice(-2)],
+      timeLine: [...(ohlcvMAs.timeLine.slice(shift, sliceEnd + shift)), ...newPoints.timeLine.slice(-2)]
     }
 
     let newKlines = {}
@@ -400,7 +396,7 @@ async function fetchNewPointAndAttach (ohlcvMAList, exchangeId, windows) {
       let startIdx = updatedInfo.closeLine.length - window
       let secondToLastPoint = _.mean(updatedInfo.closeLine.slice(startIdx - 1, endIdx - 1))
       let lastPoint = _.mean(updatedInfo.closeLine.slice(startIdx, endIdx))
-      newKlines[window] = [...ohlcvMA.klines[window].slice(shift, sliceEnd + shift), secondToLastPoint, lastPoint]
+      newKlines[window] = [...ohlcvMAs.klines[window].slice(shift, sliceEnd + shift), secondToLastPoint, lastPoint]
     }
 
     updatedInfo.klines = newKlines

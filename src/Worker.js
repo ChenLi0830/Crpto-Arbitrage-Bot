@@ -24,12 +24,14 @@ module.exports = class Worker {
   }
 
   marketBuy () {
-
+    
+    /*orderBook.asks[0][0]*/ 
   }
 
-  marketSell (percent = 100) {
+  marketSell (sellAmount) {
     // 卖完光币后，
-    if (percent === 100) {
+
+    if (sellAmount === this.BTCAmount) {
       this.done = true
       this.onWorkerUpdate(this.id)
     }
@@ -37,16 +39,15 @@ module.exports = class Worker {
 
   /**
    * 止盈：创建limit orders
-   * */
-  async createCutProfitOrders (ohlcvMA, updateWorkerStateList) {
+   * @param {*} ohlcvMAs
+   */
+  async createCutProfitOrders (ohlcvMAs) {
     try {
-      // console.log('orderBook.asks[0]', orderBook.asks[0])
-      // console.log('lastPickedTrade.boughtAmount', lastPickedTrade.boughtAmount)
-      let cutProfitList = generateCutProfitList(ohlcvMA, 60 / 5, this.dynamicProfitList)
+      let cutProfitList = generateCutProfitList(ohlcvMAs, 60 / 5, this.dynamicProfitList)
 
       let createLimitOrderPromises = cutProfitList.map(cutProfit => {
         let cutAmount = this.currencyAmount * cutProfit.percent / 100
-        return retryMutationTaskIfTimeout(this.exchange, 'createLimitSellOrder', [this.symbol, cutAmount, /*orderBook.asks[0][0]*/ this.buyPrice * (100 + cutProfit.value) / 100, {'recvWindow': 60 * 10 * 1000}])
+        return retryMutationTaskIfTimeout(this.exchange, 'createLimitSellOrder', [this.symbol, cutAmount, this.buyPrice * (100 + cutProfit.value) / 100, {'recvWindow': 60 * 10 * 1000}])
       })
 
       let limitOrders = []

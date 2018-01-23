@@ -51,8 +51,8 @@ module.exports = class Manager {
       logTopVolSymbolNumber = 10,
       logTopVolThreshold,
       volWindow = 48, // volume均线的window
-      workerLimit = 10, // worker的上限数
       buyLimitInBTC = 1, // 最多每个worker花多少BTC买币
+      dynamicProfitList,
     } = params
 
     this.exchangeId = exchangeId
@@ -63,7 +63,8 @@ module.exports = class Manager {
     this.volWindow = volWindow
     this.whiteList = whiteList
     this.blackList = blackList
-    this.workerLimit = workerLimit
+    this.buyLimitInBTC = buyLimitInBTC
+    this.dynamicProfitList = dynamicProfitList
 
     // Vol相关
     this.useVolAsCriteria = useVolAsCriteria
@@ -108,19 +109,26 @@ module.exports = class Manager {
   }
 
   async fetchData () {
+    let ohlcvList
     /**
      * 初始fetch，获取所有所需数据
      */
     if (!this.ohlcvMAsList || !this.ohlcvMAsList.length) {
       await this.exchange.loadMarkets()
       let symbols = _.filter(this.exchange.symbols, symbol => symbol.endsWith('BTC'))
-      return klineListGetDuringPeriod(this.exchangeId, symbols, this.numberOfPoints + this.padding)
-    } else {
-      /**
-       * 后续fetch，仅获取更新的数据
-       */
-      return fetchNewPointAndAttach(this.ohlcvMAsList, this.exchangeId, this.windows)
+      ohlcvList = await klineListGetDuringPeriod(this.exchangeId, symbols, this.numberOfPoints + this.padding)
     }
+    /**
+     * 后续fetch，仅获取更新的数据
+     */
+    else {
+      ohlcvList = await fetchNewPointAndAttach(this.ohlcvMAsList, this.exchangeId, this.windows)
+    }
+
+    /**
+     * 计算MA
+     */
+    this.ohlcvMAsList = calcMovingAverge(ohlcvList, this.windows)
   }
 
   async buyCurrency (symbol) {
@@ -232,15 +240,29 @@ module.exports = class Manager {
     return buyingPool
   }
 
+  async _createPartiallySellPromise (worker, toSellAmount) {
+    
+    /* 进入一个function rearrangeWorkersBTC，让每个worker先取消orders，然后卖出百分比，然后再设置orders */
+  }
+  async _createWorkersToBuySymbols (pickedSymbol, BTCForEachWorker) {
+
+  }
+
   /**
    * 创建worker，买新币，每个币的买入的额度为均分所有BTC给现有worker和新worker
    * @param {*} pickedSymbols // 从market里选出要买的symbols
    */
   async _buySymbols (pickedSymbols) {
     try {
-      let balanceBTC = this.loadBalance()
+      /**
+       * 计算每个symbol要花多少比特币买
+       */
+      let balanceBTC = await this.loadBalance()
       let spentBTC = this.workerList.reduce((sum, worker) => sum + worker.BTCAmount, 0)
       let BTCForEachWorker = (spentBTC + balanceBTC) / (pickedSymbols.length + this.workerList.length)
+      if (BTCForEachWorker > this.buyLimitInBTC) {
+        BTCForEachWorker = this.buyLimitInBTC
+      }
       /**
        * 如果BTC不够，则让现有worker卖出一部分持有币
        */
@@ -255,8 +277,6 @@ module.exports = class Manager {
           if (worker.BTCAmount > BTCForEachWorker) {
             let toSellAmount = worker.BTCAmount - BTCForEachWorker
             getBTCpromises.push(this._createPartiallySellPromise(worker, toSellAmount))
-            /* 创建promise来 */
-            /* 进入一个function rearrangeWorkersBTC，让每个worker先取消orders，然后卖出百分比，然后再设置orders */
             neededAmount -= toSellAmount
             if (neededAmount < 0) { // 攒够了足够多的BTC
               break
@@ -267,9 +287,12 @@ module.exports = class Manager {
         balanceBTC = this.loadBalance()
       }
 
+      /**
+       * 创建workers并买币
+       */
       BTCForEachWorker = balanceBTC / pickedSymbols.length // 每个币要花的BTC
       let buySymbolPromises = pickedSymbols.map(pickedSymbol => {
-        return this._createWorkerAndBuy(pickedSymbol, BTCForEachWorker)
+        return this._createWorkersToBuySymbols(pickedSymbol, BTCForEachWorker)
       })
 
       await Promise.all(buySymbolPromises)
@@ -281,16 +304,14 @@ module.exports = class Manager {
   async start () {
     while (true) {
       try {
-        let ohlcvList = await this.fetchData()
-        this.ohlcvMAsList = calcMovingAverge(ohlcvList, this.windows)
-
+        await this.fetchData()
         // 检查是否有改卖的币
         // 如果有，则创建promises，卖掉，并更新worker
 
         logSymbolsBasedOnVolPeriod(this.ohlcvMAsList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
 
         let pickedSymbols = this._pickSymbolsFromMarket()// 检查是否有该买的currency
-
+        pickedSymbols = ['ETH/BTC'] // todo remove
         if (pickedSymbols.length > 0) {
           await this._buySymbols(pickedSymbols)
         }

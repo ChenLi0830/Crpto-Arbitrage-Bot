@@ -1,3 +1,5 @@
+import { workers } from 'cluster';
+
 // 'use strict'
 const ccxt = require('ccxt')
 const asciichart = require('asciichart')
@@ -52,6 +54,7 @@ module.exports = class Manager {
       logTopVolThreshold,
       volWindow = 48, // volume均线的window
       workerLimit = 10, // worker的上限数
+      buyLimitInBTC = 1, // 最多每个worker花多少BTC买币
     } = params
 
     this.exchangeId = exchangeId
@@ -103,7 +106,7 @@ module.exports = class Manager {
 
   async loadBalance () {
     let newBTCBalance = (await retryQueryTaskIfAnyError(this.exchange, 'fetchBalance', [{'recvWindow': 60 * 10 * 1000}]))['free']['BTC']
-    log(`--- newBTCBalance ${newBTCBalance}`)
+    return newBTCBalance
   }
 
   async fetchData () {
@@ -231,22 +234,67 @@ module.exports = class Manager {
     return buyingPool
   }
 
+  /**
+   * 创建worker，买新币，每个币的买入的额度为均分所有BTC给现有worker和新worker
+   * @param {*} pickedSymbols // 从market里选出要买的symbols
+   */
+  async _buySymbols (pickedSymbols) {
+    try {
+      let balanceBTC = this.loadBalance()
+      let spentBTC = this.workerList.reduce((sum, worker) => sum + worker.BTCAmount, 0)
+      let BTCForEachWorker = (spentBTC + balanceBTC) / (pickedSymbols.length + this.workerList.length)
+      /**
+       * 如果BTC不够，则让现有worker卖出一部分持有币
+       */
+      let requiredBTC = BTCForEachWorker * pickedSymbols.length
+      if (requiredBTC < balanceBTC) {
+        /**
+         * 让现有worker卖出部分币，好抓住新机会
+         */
+        let neededAmount = requiredBTC - balanceBTC // 需要worker卖出的量
+        let getBTCpromises = []
+        for (let worker of this.workerList) {
+          if (worker.BTCAmount > BTCForEachWorker) {
+            let toSellAmount = worker.BTCAmount - BTCForEachWorker
+            getBTCpromises.push(this._createPartiallySellPromise(worker, toSellAmount))
+            /* 创建promise来 */
+            /* 进入一个function rearrangeWorkersBTC，让每个worker先取消orders，然后卖出百分比，然后再设置orders */
+            neededAmount -= toSellAmount
+            if (neededAmount < 0) { // 攒够了足够多的BTC
+              break
+            }
+          }
+        }
+        await Promise.all(getBTCpromises)
+        balanceBTC = this.loadBalance()
+      }
+
+      BTCForEachWorker = balanceBTC / pickedSymbols.length // 每个币要花的BTC
+      let buySymbolPromises = pickedSymbols.map(pickedSymbol => {
+        return this._createWorkerAndBuy(pickedSymbol, BTCForEachWorker)
+      })
+
+      await Promise.all(buySymbolPromises)
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
   async start () {
     while (true) {
       try {
         let ohlcvList = await this.fetchData()
         this.ohlcvMAsList = calcMovingAverge(ohlcvList, this.windows)
-        // console.log('this.ohlcvMAsList.length', this.ohlcvMAsList.length)
-        // // console.log('this.ohlcvMAsList[0]', Object.keys(this.ohlcvMAsList[0]))
-        // process.exit()
-        logSymbolsBasedOnVolPeriod(this.ohlcvMAsList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
-        let pickedSymbols = this._pickSymbolsFromMarket()// 检查是否有该买的currency
-        if (pickedSymbols.length > 0) {
-          // 开始分配，1. 看现在有多少worker，如果没有超过上限，2. 卖掉现有worker的一部分币 3. 创建新worker买币
 
-          this.buyCurrency('ETH/BTC')
-          console.log('this.workerList', this.workerList)
-          this.workerList[0].createCutProfitOrders(this.updateWorkerStateList.bind(this))
+        // 检查是否有改卖的币
+        // 如果有，则创建promises，卖掉，并更新worker
+
+        logSymbolsBasedOnVolPeriod(this.ohlcvMAsList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
+
+        let pickedSymbols = this._pickSymbolsFromMarket()// 检查是否有该买的currency
+
+        if (pickedSymbols.length > 0) {
+          await this._buySymbols(pickedSymbols)
         }
       } catch (error) {
         console.log(error)

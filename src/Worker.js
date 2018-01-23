@@ -12,18 +12,23 @@ const player = require('play-sound')(opts = {})
 
 module.exports = class Worker {
   constructor (id, symbol, exchange, updateWorkerList, dynamicProfitList, BTCAmount, params) {
+    const {
+      maxPartialSellPercent = 50
+    } = params
     this.id = id
     this.symbol = symbol
     this.exchange = exchange
     this.BTCAmount = BTCAmount
     this.onWorkerUpdate = updateWorkerList // 当worker完成大变动时，通知Manager
     this.dynamicProfitList = dynamicProfitList
+    this.maxPartialSellPercent = maxPartialSellPercent
 
     this.currencyAmount = undefined // 买了多少币
     this.buyPrice = undefined // 购买价格
     this.limitOrders = []
     this.done = false
     this.orderFilledAmount = 0 // 创建的limit sell order被filled了多少
+    this.remainingBTC = BTCAmount
   }
 
   async marketBuy (ohlcvMAs) {
@@ -129,7 +134,8 @@ module.exports = class Worker {
      * */
     else {
       let targetCurrencyAmount = targetBTCAmount / ohlcvMAs.data.slice(-1)[0].close
-      sellAmount = Math.min(targetCurrencyAmount, targetBalance * 0.5)
+      let maxPartialSellAmount = targetBalance * (this.maxPartialSellPercent / 100)
+      sellAmount = Math.min(targetCurrencyAmount, maxPartialSellAmount)
     }
 
     log(`--- Start Task: Worker for ${this.symbol} is selling ${targetCurrency}, balance ${targetBalance}, sell amount ${sellAmount}`.green)
@@ -152,7 +158,7 @@ module.exports = class Worker {
       log(`--- Selling Result`.blue, sellResult)
     }
 
-    this.BTCAmount = this.BTCAmount - sellAmount
+    this.BTCAmount = this.BTCAmount - sellAmount * ohlcvMAs.data.slice(-1)[0].close
     this.limitOrders = []
     this.orderFilledAmount = 0
   }

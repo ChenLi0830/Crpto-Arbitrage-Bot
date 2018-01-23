@@ -245,7 +245,9 @@ module.exports = class Manager {
     /* 进入一个function rearrangeWorkersBTC，让每个worker先取消orders，然后卖出百分比，然后再设置orders */
   }
   async _createWorkersToBuySymbols (pickedSymbol, BTCForEachWorker) {
-
+    // newPlotDot.event = `Buy in ${pickedTrade.symbol}`
+    // newPlotDot.price = (spentBTC / boughtAmount)
+    // newPlotDot.value = BTCAmount
   }
 
   /**
@@ -258,8 +260,11 @@ module.exports = class Manager {
        * 计算每个symbol要花多少比特币买
        */
       let balanceBTC = await this.loadBalance()
-      let spentBTC = this.workerList.reduce((sum, worker) => sum + worker.BTCAmount, 0)
-      let BTCForEachWorker = (spentBTC + balanceBTC) / (pickedSymbols.length + this.workerList.length)
+      let updateWorkerRemainingBTCPromises = this.workerList.map(worker => worker.updateRemainingBTCAmount())
+      await Promise.all(updateWorkerRemainingBTCPromises)
+      let totalWorkersHoldedBTC = this.workerList.reduce((sum, worker) => sum + worker.remainingBTC, 0)
+      // let workerHoldedBTC = await this.workerList.reduce(async (sum, worker) => sum + worker.getRemainingBTCAmount(), 0)
+      let BTCForEachWorker = (totalWorkersHoldedBTC + balanceBTC) / (pickedSymbols.length + this.workerList.length)
       if (BTCForEachWorker > this.buyLimitInBTC) {
         BTCForEachWorker = this.buyLimitInBTC
       }
@@ -274,8 +279,8 @@ module.exports = class Manager {
         let neededAmount = requiredBTC - balanceBTC // 需要worker卖出的量
         let getBTCpromises = []
         for (let worker of this.workerList) {
-          if (worker.BTCAmount > BTCForEachWorker) {
-            let toSellAmount = worker.BTCAmount - BTCForEachWorker
+          if (worker.remainingBTC > BTCForEachWorker) {
+            let toSellAmount = worker.remainingBTC - BTCForEachWorker
             getBTCpromises.push(this._createPartiallySellPromise(worker, toSellAmount))
             neededAmount -= toSellAmount
             if (neededAmount < 0) { // 攒够了足够多的BTC
@@ -316,10 +321,9 @@ module.exports = class Manager {
           await this._buySymbols(pickedSymbols)
         }
       } catch (error) {
-        console.log(error)
+        console.log('Major error', error)
+        break
       }
-
-      break // Todo remove in production
     }
   }
 }

@@ -23,6 +23,7 @@ module.exports = class Worker {
     this.buyPrice = undefined // 购买价格
     this.limitOrders = []
     this.done = false
+    this.orderFilledAmount = 0 // 创建的limit sell order被filled了多少
   }
 
   async marketBuy (ohlcvMAs) {
@@ -84,12 +85,76 @@ module.exports = class Worker {
     log(`--- Finished task: Worker finish buying ${this.currencyAmount} ${this.symbol} at the price: ${this.buyPrice}; Total BTC of this worker: ${this.BTCAmount}`.green)
   }
 
-  marketSell (sellAmount) {
-
-    if (sellAmount === this.BTCAmount) {
-      this.done = true
-      this.onWorkerUpdate(this.id)
+  async updateCutProfitFilledAmount () {
+    /*
+    * 查看limit order的filled amount
+    * */
+    let fetchedOrders = await retryQueryTaskIfAnyError(this.exchange, 'fetchOrders', [this.symbol])
+    let filledAmount = 0
+    for (let limitOrder of this.limitOrders) {
+      let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
+      if (currentOrderStatus.status === 'closed') { // 止盈order被filled了
+        filledAmount += limitOrder.amount
+      }
+      else if (currentOrderStatus.status === 'open') { // 止盈order未被filled，或被filled一部分
+        filledAmount += Math.min(currentOrderStatus.filled, limitOrder.amount) // filled是safeFloat，可能跟实际值有出入
+      }
     }
+    log(`Total filledAmount ${filledAmount}`)
+    this.filledAmount = filledAmount
+  }
+
+  async updateRemainingBTCAmount () {
+    await this.updateCutProfitFilledAmount()
+    this.remainingBTC = ((this.currencyAmount - this.filledAmount) / this.currencyAmount) * this.BTCAmount
+  }
+
+  /**
+   * 用市场价卖出，获得targetBTCAmount的BTC，若为targetBTCAmount 为undefined，则卖出全部
+   * @param {*} ohlcvMAs
+   * @param {Number} [targetBTCAmount] 要获得多少BTC，默认为undefined
+   */
+  async marketSell (ohlcvMAs, targetBTCAmount = undefined) {
+    let targetCurrency = this.symbol.split('/')[0]
+    let targetBalance = (await retryQueryTaskIfAnyError(this.exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free'][targetCurrency]
+    let sellAmount
+    /**
+     * sellAmount = 全卖
+     * */
+    if (targetBTCAmount === undefined) {
+      sellAmount = targetBalance
+    }
+    /**
+     * sellAmount = 卖一部分，最多一半
+     * */
+    else {
+      let targetCurrencyAmount = targetBTCAmount / ohlcvMAs.data.slice(-1)[0].close
+      sellAmount = Math.min(targetCurrencyAmount, targetBalance * 0.5)
+    }
+
+    log(`--- Start Task: Worker for ${this.symbol} is selling ${targetCurrency}, balance ${targetBalance}, sell amount ${sellAmount}`.green)
+    player.play('./src/Purr.aiff', (err) => {
+      if (err) throw err
+    })
+
+    let minSellAmount = this.exchange.markets[this.symbol].limits.amount.min
+    if (sellAmount < minSellAmount) {
+      /**
+       * 如果小于所能卖出的最小值，则认为是已经被用户或止盈卖光了
+       * */
+      log(`${this.symbol} has already been sold by user or limit orders`.yellow)
+    }
+    else {
+      /**
+       * 卖币
+       * */
+      let sellResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketSellOrder', [this.symbol, sellAmount, {'recvWindow': 60*10*1000}])
+      log(`--- Selling Result`.blue, sellResult)
+    }
+
+    this.BTCAmount = this.BTCAmount - sellAmount
+    this.limitOrders = []
+    this.orderFilledAmount = 0
   }
 
   /**
@@ -139,21 +204,8 @@ module.exports = class Worker {
    */
   async cancelCutProfitOrders () {
     log(`--- Start Task: Worker for ${this.symbol} is cancelling limit sell orders`.green)
-    /*
-    * 查看limit order的filled amount
-    * */
     let fetchedOrders = await retryQueryTaskIfAnyError(this.exchange, 'fetchOrders', [this.symbol])
-    let filledAmount = 0
-    for (let limitOrder of this.limitOrders) {
-      let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
-      if (currentOrderStatus.status === 'closed') { // 止盈order被filled了
-        filledAmount += limitOrder.amount
-      }
-      else if (currentOrderStatus.status === 'open') { // 止盈order未被filled，或被filled一部分
-        filledAmount += Math.min(currentOrderStatus.filled, limitOrder.amount) // filled是safeFloat，可能跟实际值有出入
-      }
-    }
-    log(`Total filledAmount ${filledAmount}`)
+    await this.updateCutProfitFilledAmount()
     /**
      * 取消被程序创建且当前为open的order
      * */
@@ -164,6 +216,7 @@ module.exports = class Worker {
     let cancelOrderPromises = orderIds.map(orderId => retryMutationTaskIfTimeout(this.exchange, 'cancelOrder', [orderId, this.symbol, {'recvWindow': 60*10*1000}]))
 
     let results = await Promise.all(cancelOrderPromises)
+
     log(`--- Finished task: Worker for ${this.symbol} finished cancelling open orders`.green)
   }
 }

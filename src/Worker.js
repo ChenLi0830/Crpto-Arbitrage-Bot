@@ -18,28 +18,21 @@ module.exports = class Worker {
     this.onWorkerUpdate = updateWorkerList // 当worker完成大变动时，通知Manager
     this.dynamicProfitList = dynamicProfitList
 
-    this.currencyAmount = 0 // 买了多少币
-    this.buyPrice = 0 // 购买价格
+    this.currencyAmount = undefined // 买了多少币
+    this.buyPrice = undefined // 购买价格
     this.limitOrders = []
     this.done = false
   }
 
-  async marketBuy (ohlcvMAs, klineIndex) {
+  async marketBuy (ohlcvMAs) {
     let orderBook = await retryQueryTaskIfAnyError(this.exchange, 'fetchL2OrderBook', [this.symbol])
     let weightedPrices = api.weightedPrice(orderBook.asks, this.BTCAmount)
 
     let askedPriceHigh = weightedPrices.tradePrice
     let weightedPrice = weightedPrices.avgPrice
 
-    this.buyPrice = weightedPrice
-
     log(`--- Buy in ${this.symbol} at ${weightedPrice} with BTCAmount ${this.BTCAmount}`.blue)
-    log('last 4 close prices', pickedTrade.closeLine.slice(-4).join(', '))
-    log('last 4 close timeLine', pickedTrade.timeLine.slice(-4).join(', '))
-    log('last 4 close volumeLine', pickedTrade.volumeLine.slice(-4).join(', '))
-    log('last 4 close MA4', pickedTrade.klines[windows[0]].slice(-4).join(', '))
-    log('last 4 close MA16', pickedTrade.klines[windows[1]].slice(-4).join(', '))
-    log('klineIndex', klineIndex)
+    log('last 4 close prices', ohlcvMAs.data.slice(-4).join('\n'))
 
     player.play('./src/Glass.aiff', (err) => {
       if (err) throw err
@@ -49,10 +42,9 @@ module.exports = class Worker {
      * 买三次，避免买不到
      * */
     let maxAmount = this.BTCAmount * 0.999 / askedPriceHigh
-    let buyInAmount = maxAmount * 0.7 > 1 ? Math.trunc(maxAmount * 0.7) : maxAmount * 0.7
-
-    let buyResult = await retryMutationTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
-    //        let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
+    let buyInAmount = maxAmount * 0.7
+    buyInAmount = buyInAmount > 1 ? Math.trunc(buyInAmount) : buyInAmount
+    let buyResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketBuyOrder', [this.symbol, buyInAmount, {'recvWindow': 60 * 10 * 1000}])
     console.log('buyResult', buyResult)
     if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
       throw new Error('Purchase error!')
@@ -61,11 +53,9 @@ module.exports = class Worker {
     let boughtAmount = Number(buyResult.info.executedQty)
 
     try {
-      let BTCAmount = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
-      //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
-      let maxAmount = BTCAmount * 0.999 / askedPriceHigh
-      let buyInAmount = maxAmount * 0.7 > 1 ? Math.trunc(maxAmount * 0.7) : maxAmount * 0.7
-      let buyResult = await retryMutationTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
+      let buyInAmount = maxAmount * 0.21
+      buyInAmount = buyInAmount > 1 ? Math.trunc(buyInAmount) : buyInAmount
+      let buyResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketBuyOrder', [this.symbol, buyInAmount, {'recvWindow': 60*10*1000}])
       //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
       log(`Second buy result`, buyResult)
       if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -74,11 +64,9 @@ module.exports = class Worker {
 
       boughtAmount += Number(buyResult.info.executedQty)
 
-      BTCAmount = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
-      //          let BTCAmount = (await exchange.fetchBalance({'recvWindow': 60*10*1000}))['free']['BTC']
-      maxAmount = BTCAmount * 0.999 / askedPriceHigh
-      buyInAmount = maxAmount * 0.7 > 1 ? Math.trunc(maxAmount * 0.7) : maxAmount * 0.7
-      buyResult = await retryMutationTaskIfTimeout(exchange, 'createMarketBuyOrder', [symbol, buyInAmount, {'recvWindow': 60*10*1000}])
+      buyInAmount = maxAmount * 0.07
+      buyInAmount = buyInAmount > 1 ? Math.trunc(buyInAmount) : buyInAmount
+      buyResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketBuyOrder', [this.symbol, buyInAmount, {'recvWindow': 60*10*1000}])
       //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
       log(`Third buy result`, buyResult)
       if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
@@ -91,19 +79,9 @@ module.exports = class Worker {
       log(`Second or third buy error, relatively ok ${error}`.red)
     }
 
-    lastPickedTrade = pickedTrade
-    lastPickedTrade.boughtAmount = boughtAmount
-
-    let newBTCAmount = (await retryQueryTaskIfAnyError(exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free']['BTC']
-    let spentBTC = BTCAmount - newBTCAmount
-    let buyPrice = (spentBTC / boughtAmount)
-    log(`---    spent ${spentBTC} BTC -  ${Math.trunc(100 * spentBTC/BTCAmount)}% in purchase, average purchase price ${buyPrice}`)
-    lastPickedTrade.buyPrice = buyPrice
-
-    newPlotDot.event = `Buy in ${pickedTrade.symbol}`
-    newPlotDot.price = (spentBTC / boughtAmount)
-    newPlotDot.value = BTCAmount
-/*orderBook.asks[0][0]*/ 
+    this.buyPrice = weightedPrice
+    this.currencyAmount = boughtAmount
+    log(`Worker finish buying ${this.currencyAmount} ${this.symbol} at the price: ${this.buyPrice}; Total BTC of this worker: ${this.BTCAmount}`)
   }
 
   marketSell (sellAmount) {

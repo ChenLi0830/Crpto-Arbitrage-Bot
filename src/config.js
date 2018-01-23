@@ -27,6 +27,17 @@ let padding = Math.max(...windows)
  * */
 let whiteList = []
 let blackList = []
+let useVolAsCriteria = true
+let longVolSymbolNo = 10 // 用长期vol选多少个候选币
+let shortVolSymbolNo = 2 // 用短期vol选多少个候选币
+let longVolWindow = 24 * 60 / 5 // 长期vol window是多长
+let shortVolWindow = 4 * 60 / 5 // 短期vol window是多长
+let logTopVolWindow = 15 / 5 // 显示 Volume 白名单候选人，window多长
+let logTopVolSymbolNumber = 10 // 显示 Volume 白名单候选人，显示几个
+let logTopVolThreshold
+let volWindow = 48 // volume均线的window
+let buyLimitInBTC = 1 // 最多每个worker花多少BTC买币
+
 //  let whiteList = [
 //      'ETH/BTC',
 //      'MANA/BTC'
@@ -69,5 +80,15 @@ module.exports = {
   dynamicProfitList,
   numberOfPoints,
   padding,
-  blackList
+  blackList,
+  useVolAsCriteria,
+  longVolSymbolNo,
+  shortVolSymbolNo,
+  longVolWindow,
+  shortVolWindow,
+  logTopVolWindow,
+  logTopVolSymbolNumber,
+  logTopVolThreshold,
+  volWindow,
+  buyLimitInBTC,
 }

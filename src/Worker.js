@@ -85,7 +85,6 @@ module.exports = class Worker {
   }
 
   marketSell (sellAmount) {
-    // 卖完光币后，
 
     if (sellAmount === this.BTCAmount) {
       this.done = true
@@ -94,11 +93,14 @@ module.exports = class Worker {
   }
 
   /**
-   * 止盈：创建limit orders
+   * 设置止盈：创建 limit sell orders
    * @param {*} ohlcvMAs
    */
   async createCutProfitOrders (ohlcvMAs) {
     try {
+      if (!this.currencyAmount) {
+        throw new Error(`CreateCutProfitOrders: must buy symbol first`)
+      }
       let cutProfitList = generateCutProfitList(ohlcvMAs, 60 / 5, this.dynamicProfitList)
 
       let createLimitOrderPromises = cutProfitList.map(cutProfit => {
@@ -121,8 +123,10 @@ module.exports = class Worker {
           log(`createLimitOrdersResult error, often because of not enough balance, ignored`.red)
         }
       }))
-      console.log('limitOrders', limitOrders)
+
       this.limitOrders = limitOrders
+
+      log(`Worker finished creating limit orders ${JSON.stringify(limitOrders)}`)
     } catch (error) {
       console.log(error)
     }

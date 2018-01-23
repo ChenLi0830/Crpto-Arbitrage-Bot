@@ -40,7 +40,7 @@ module.exports = class Manager {
       numberOfPoints,
       padding,
       windows,
-      useVolAsCriteria = true,
+      useVolAsCriteria = false, // todo 改回true
       whiteList = [],
       blackList = [],
       longVolSymbolNo = 10, // 用长期vol选多少个候选币
@@ -50,6 +50,8 @@ module.exports = class Manager {
       logTopVolWindow = 15 / 5,
       logTopVolSymbolNumber = 10,
       logTopVolThreshold,
+      volWindow = 48, // volume均线的window
+      workerLimit = 10, // worker的上限数
     } = params
 
     this.exchangeId = exchangeId
@@ -57,8 +59,10 @@ module.exports = class Manager {
     this.numberOfPoints = numberOfPoints
     this.padding = padding
     this.windows = windows
+    this.volWindow = volWindow
     this.whiteList = whiteList
     this.blackList = blackList
+    this.workerLimit = workerLimit
 
     // Vol相关
     this.useVolAsCriteria = useVolAsCriteria
@@ -70,7 +74,7 @@ module.exports = class Manager {
     this.logTopVolSymbolNumber = logTopVolSymbolNumber
     this.logTopVolThreshold = logTopVolThreshold
 
-    this.ohlcvMAList = [] // 记录所有symbols的k线和MA
+    this.ohlcvMAsList = [] // 记录所有symbols的k线和MA
     this.workerList = [] // 记录所有active的worker
     this.eventList = [] // 记录买币和卖币events
     this.symbolPool = [] // 统计所有白名单黑名单后，最终会从这个pool里挑选币
@@ -106,7 +110,7 @@ module.exports = class Manager {
     /**
      * 初始fetch，获取所有所需数据
      */
-    if (!this.ohlcvMAList || !this.ohlcvMAList.length) {
+    if (!this.ohlcvMAsList || !this.ohlcvMAsList.length) {
       await this.exchange.loadMarkets()
       let symbols = _.filter(this.exchange.symbols, symbol => symbol.endsWith('BTC'))
       return klineListGetDuringPeriod(this.exchangeId, symbols, this.numberOfPoints + this.padding)
@@ -114,7 +118,7 @@ module.exports = class Manager {
       /**
        * 后续fetch，仅获取更新的数据
        */
-      return fetchNewPointAndAttach(this.ohlcvMAList, this.exchangeId, this.windows)
+      return fetchNewPointAndAttach(this.ohlcvMAsList, this.exchangeId, this.windows)
     }
   }
 
@@ -133,32 +137,113 @@ module.exports = class Manager {
     return [...whiteListSet]
   }
 
-  _pickSymbolFromMarket () {
+  klineMathCriteria (ohlcvMAs, klineIdx) {
+    /**
+     * 检查 volume 条件
+     */
+    let isVolumeIncreaseFast = (ohlcvMAs.data[klineIdx].volume / ohlcvMAs.data[klineIdx - 1].volume) > 1
+    let volumeList = ohlcvMAs.data.slice(klineIdx - this.volWindow + 1, klineIdx + 1).map(o => o.volume)
+    let volumeAvg = _.mean(volumeList)
+    let isVolumeHigherThanAvg = volumeList.slice(-1)[0] > volumeAvg
+    let matchVolCriteria = isVolumeIncreaseFast && isVolumeHigherThanAvg
+    /**
+     * 检查 price 条件
+     */
+    let isFastMAGreater = (ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`] >= ohlcvMAs.data[klineIdx][`MA${this.windows[1]}`]) && (ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`] >= ohlcvMAs.data[klineIdx][`MA${this.windows[2]}`])
+    let isMiddleMAGreater = ohlcvMAs.data[klineIdx][`MA${this.windows[1]}`] >= ohlcvMAs.data[klineIdx][`MA${this.windows[2]}`]
+    let priceGreaterThanFastMA = ohlcvMAs.data[klineIdx].close > ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`]
+    let isFastMAIncreasing = ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`] > ohlcvMAs.data[klineIdx - 1][`MA${this.windows[0]}`]
+    let isMiddleMAIncreasing = ohlcvMAs.data[klineIdx][`MA${this.windows[1]}`] > ohlcvMAs.data[klineIdx - 1][`MA${this.windows[1]}`]
+    let isSlowMAIncreasing = ohlcvMAs.data[klineIdx][`MA${this.windows[2]}`] > ohlcvMAs.data[klineIdx - 1][`MA${this.windows[2]}`]
+    let isKlineHigherThanPrevPoint = (ohlcvMAs.data[klineIdx].open > ohlcvMAs.data[klineIdx - 1].open) && (ohlcvMAs.data[klineIdx].close > ohlcvMAs.data[klineIdx - 1].close)
+    let matchPriceCriteria = isFastMAGreater && isMiddleMAGreater && priceGreaterThanFastMA && isFastMAIncreasing && isMiddleMAIncreasing && isSlowMAIncreasing && isKlineHigherThanPrevPoint
+
+    return matchVolCriteria && matchPriceCriteria
+  }
+
+  /**
+   * @param {*} ohlcvMAs
+   * @param {*} klineIndex 用来判断是否满足条件的kline的Index
+   */
+  checkBuyingCriteria (ohlcvMAs) {
+    let isNewKline = process.env.PRODUCTION ? ((new Date().getTime() - ohlcvMAs.data.slice(-1)[0].timeStamp) < 45 * 1000) : false
+    let currentIndex = ohlcvMAs.data.length - 1
+    let currentKlineMatchCriteria = this.klineMathCriteria(ohlcvMAs, currentIndex)
+    let prevIndex = currentIndex - 1
+    let prevKlineMatchCriteria = this.klineMathCriteria(ohlcvMAs, prevIndex)
+
+    /*
+    * 如果当前k线满足条件，或如果是刚刚生成的k线，判断它之前的k线是否满足条件，如果是则也买入
+    * */
+    if (currentKlineMatchCriteria || (isNewKline && prevKlineMatchCriteria)) {
+      return true
+    }
+  }
+
+  _pickSymbolsFromMarket () {
+    /**
+     * 获得名单备选池
+     */
     if (this.useVolAsCriteria) {
-      let topVolumeList = getTopVolume(this.ohlcvMAList, undefined, this.longVolWindow)
+      let topVolumeList = getTopVolume(this.ohlcvMAsList, undefined, this.longVolWindow)
       let volumeWhiteListLong = (topVolumeList).map(o => `${o.symbol}`)
 
-      topVolumeList = getTopVolume(this.ohlcvMAList, undefined, this.shortVolWindow)
+      topVolumeList = getTopVolume(this.ohlcvMAsList, undefined, this.shortVolWindow)
       let volumeWhiteListShort = (topVolumeList).map(o => `${o.symbol}`)
 
       this.symbolPool = this._getWhiteList(this.whiteList, volumeWhiteListLong, volumeWhiteListShort, this.blackList)
       log(`symbolPool: ${this.symbolPool}`.yellow)
     }
+    else {
+      let whiteList = _.filter(this.exchange.symbols, o => o.endsWith('/BTC'))
+      this.symbolPool = this._getWhiteList(whiteList, [], [], this.blackList)
+    }
 
-    // todo 检查价格和其他条件，是否该买
+    /**
+     * 获得购买池 - 挑出现在买该哪些币
+     */
+    let buyingPool = []
+    for (let ohlcvMAs of this.ohlcvMAsList) {
+      /**
+       * 过滤不在名单候选池中的币
+       * */
+      if (this.symbolPool > 0) {
+        if (!this.symbolPool.includes(ohlcvMAs.symbol)) {
+          continue
+        }
+      }
+      /**
+       * 过滤已经买入的币
+       * */
+      let boughtSymbols = this.workerList.map(worker => worker.symbol)
+      if (boughtSymbols.indexOf(ohlcvMAs.symbol) > -1) {
+        continue
+      }
+      /**
+       * 过滤不符合买入条件的币
+       */
+      let matchBuyingCriteria = this.checkBuyingCriteria(ohlcvMAs)
+      if (matchBuyingCriteria) {
+        buyingPool.push(ohlcvMAs.symbol)
+      }
+    }
+
+    return buyingPool
   }
 
   async start () {
     while (true) {
       try {
         let ohlcvList = await this.fetchData()
-        this.ohlcvMAList = calcMovingAverge(ohlcvList, this.windows)
-        // console.log('this.ohlcvMAList.length', this.ohlcvMAList.length)
-        // // console.log('this.ohlcvMAList[0]', Object.keys(this.ohlcvMAList[0]))
+        this.ohlcvMAsList = calcMovingAverge(ohlcvList, this.windows)
+        // console.log('this.ohlcvMAsList.length', this.ohlcvMAsList.length)
+        // // console.log('this.ohlcvMAsList[0]', Object.keys(this.ohlcvMAsList[0]))
         // process.exit()
-        logSymbolsBasedOnVolPeriod(this.ohlcvMAList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
-        let pickedSymbol = this._pickSymbolFromMarket()// 检查是否有该买的currency
-        if (pickedSymbol) {
+        logSymbolsBasedOnVolPeriod(this.ohlcvMAsList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
+        let pickedSymbols = this._pickSymbolsFromMarket()// 检查是否有该买的currency
+        if (pickedSymbols.length > 0) {
+          // 开始分配，1. 看现在有多少worker，如果没有超过上限，2. 卖掉现有worker的一部分币 3. 创建新worker买币
+
           this.buyCurrency('ETH/BTC')
           console.log('this.workerList', this.workerList)
           this.workerList[0].createCutProfitOrders(this.updateWorkerStateList.bind(this))

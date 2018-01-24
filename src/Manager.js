@@ -53,6 +53,7 @@ module.exports = class Manager {
       volWindow = 48, // volume均线的window
       buyLimitInBTC = 1, // 最多每个worker花多少BTC买币
       dynamicProfitList,
+      useLockProfit = false
     } = params
 
     this.exchangeId = exchangeId
@@ -65,6 +66,7 @@ module.exports = class Manager {
     this.blackList = blackList
     this.buyLimitInBTC = buyLimitInBTC
     this.dynamicProfitList = dynamicProfitList
+    this.useLockProfit = useLockProfit
 
     // Vol相关
     this.useVolAsCriteria = useVolAsCriteria
@@ -227,6 +229,7 @@ module.exports = class Manager {
        */
       let matchBuyingCriteria = this.checkBuyingCriteria(ohlcvMAs)
       if (matchBuyingCriteria) {
+        log(`Should buy ${ohlcvMAs.symbol} - last 4 klines\n`, ohlcvMAs.data.slice(-4).map(o => JSON.stringify(o)).join('\n'))
         buyingPool.push(ohlcvMAs.symbol)
       }
     }
@@ -316,6 +319,79 @@ module.exports = class Manager {
     }
   }
 
+  async createReturnWorkerIfShouldSellPromise (worker) {
+    let currentOhlcvMAs = _.find(this.ohlcvMAsList, {symbol: worker.symbol})
+
+    let shouldLockProfit = false
+    /**
+     * 是否锁定收益：止盈线被触发，且价格小于等于成本价 (lastPickedTrade.buyPrice) ?
+     * */
+    if (this.useLockProfit) {
+      let priceDropThroughCost = currentOhlcvMAs.data.slice(-1)[0].close <= worker.buyPrice
+      if (priceDropThroughCost) { // 判断止盈线是否被触发
+        log(`Current price ${currentOhlcvMAs.data.slice(-1)[0].close} <= Purchase price ${worker.buyPrice}`.green)
+        await worker.updateCutProfitFilledAmount()
+        if (worker.orderFilledAmount > 0) {
+          shouldLockProfit = true
+        }
+      }
+    }
+
+    let dropThroughKline = false
+    let fastMADropThroughMiddleMA = false
+    let volumeLessThanPrevPoint = false
+    /*
+    * 如果是在当前kline买入，需要等kline结束才判断是否dropThroughKline
+    * */
+    if (currentOhlcvMAs.data.slice(-1)[0].timeStamp > worker.buyTimeStamp) {
+      // 生产环境中，卖出是用前一根kline判断
+      let sellKline = currentOhlcvMAs.data.length - 2
+      let fastMA = `MA${this.windows[0]}`
+      let mediumMA = `MA${this.windows[1]}`
+      dropThroughKline = currentOhlcvMAs.data[sellKline].close < currentOhlcvMAs.data[sellKline][fastMA]
+      fastMADropThroughMiddleMA = currentOhlcvMAs.data[sellKline][fastMA] < currentOhlcvMAs.data[sellKline][mediumMA] && currentOhlcvMAs.data[sellKline - 1][fastMA] > currentOhlcvMAs.data[sellKline - 1][mediumMA]
+      // volumeLessThanPrevPoint = (currentOhlcvMAs.data[sellKline].volume / currentOhlcvMAs.data[sellKline - 1].volume) < 0.5
+    }
+    /**
+     * 如果任一条件满足，则返回worker
+     */
+    if (shouldLockProfit || dropThroughKline || fastMADropThroughMiddleMA || volumeLessThanPrevPoint) {
+      log(`--- ${worker.symbol} shouldLockProfit ${shouldLockProfit} dropThroughKline ${dropThroughKline} fastMADropThroughMiddleMA ${fastMADropThroughMiddleMA} volumeLessThanPrevPoint ${volumeLessThanPrevPoint}`.yellow)
+      log(`Should sell ${worker.symbol} last 4 klines\n`, currentOhlcvMAs.data.slice(-4).map(o => JSON.stringify(o)).join('\n'))
+      return worker
+    }
+    else {
+      return undefined
+    }
+  }
+
+  async _checkIfWorkersShouldSell () {
+    let checkWorkerShouldSellPromises = this.workerList.map(worker =>
+      this.createReturnWorkerIfShouldSellPromise(worker)
+    )
+    let checkWorkerShouldSellResult = await Promise.all(checkWorkerShouldSellPromises)
+    let shouldSellWorkers = _.filter(checkWorkerShouldSellResult, o => !!o)
+    console.log('workerShouldSellList', shouldSellWorkers.map(worker => worker.symbol))
+    return shouldSellWorkers
+  }
+
+  /**
+   * toSellWorkers卖币，并从this.workerList里删除这些workers
+   * @param {*} toSellWorkers
+   */
+  async _workersSell (toSellWorkers) {
+    let workerSellPromises = toSellWorkers.map(async worker => {
+      let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol: worker.symbol})
+      return worker.marketSell(ohlcvMAs)
+    })
+    await Promise.all(workerSellPromises)
+
+    for (let worker of toSellWorkers) {
+      let workerIdx = _.findIndex(this.workerList, {id: worker.id})
+      this.workerList.splice(workerIdx, 1)
+    }
+  }
+
   async start () {
     while (true) {
       try {
@@ -326,11 +402,19 @@ module.exports = class Manager {
         logSymbolsBasedOnVolPeriod(this.ohlcvMAsList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
 
         let pickedSymbols = this._pickSymbolsFromMarket()// 检查是否有该买的currency
-        pickedSymbols = ['ETH/BTC'] // todo remove
         if (pickedSymbols.length > 0) {
           await this._buySymbols(pickedSymbols)
         }
 
+        let toSellWorkers = await this._checkIfWorkersShouldSell()
+        if (toSellWorkers.length > 0) {
+          await this._workersSell(toSellWorkers)
+        }
+
+        pickedSymbols = ['ETH/BTC'] // todo remove
+        if (pickedSymbols.length > 0) {
+          await this._buySymbols(pickedSymbols)
+        }
         pickedSymbols = ['LTC/BTC'] // todo remove
         if (pickedSymbols.length > 0) {
           await this._buySymbols(pickedSymbols)

@@ -39,7 +39,6 @@ module.exports = class Worker {
     let askedPriceHigh = weightedPrices.tradePrice
     let weightedPrice = weightedPrices.avgPrice
     log(`--- Start Task: Worker for ${this.symbol} is buying at ${weightedPrice} with BTCAmount ${this.BTCAmount}`.blue)
-    log('last 4 close prices\n', ohlcvMAs.data.slice(-4).map(o => JSON.stringify(o)).join('\n'))
 
     player.play('./src/Glass.aiff', (err) => {
       if (err) throw err

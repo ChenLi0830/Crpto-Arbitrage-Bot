@@ -224,8 +224,12 @@ module.exports = class Manager {
       topVolumeList = getTopVolume(this.ohlcvMAsList, undefined, this.shortVolWindow)
       let volumeWhiteListShort = (topVolumeList).map(o => `${o.symbol}`)
 
+      let prevPoolStr = JSON.stringify(this.symbolPool)
       this.symbolPool = this._getWhiteList(this.whiteList, volumeWhiteListLong, volumeWhiteListShort, this.blackList)
-      log(`symbolPool: ${this.symbolPool}`.yellow)
+      if (JSON.stringify(this.symbolPool) !== prevPoolStr) {
+        // 如果symbolPool变化了，则log新Pool
+        log(`SymbolPool: ${this.symbolPool}`.yellow)
+      }
     }
     else {
       let whiteList = _.filter(this.exchange.symbols, o => o.endsWith('/BTC'))

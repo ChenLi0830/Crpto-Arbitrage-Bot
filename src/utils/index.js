@@ -416,7 +416,9 @@ function checkMemory () {
     process.exit()
   }
   var heapUsed = process.memoryUsage().heapUsed
-  console.log('Program is using ' + heapUsed + ' bytes of Heap.')
+  if (heapUsed > 200 * 1024 * 1024) { // 如果使用过限内存，则报警
+    console.log('Warning: Program is using more than ' + heapUsed / (1024 * 1024) + ' MB of Heap.')
+  }
 }
 
 module.exports = {

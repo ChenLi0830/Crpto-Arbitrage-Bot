@@ -131,12 +131,6 @@ module.exports = class Manager {
     this.ohlcvMAsList = calcMovingAverge(ohlcvList, this.windows)
   }
 
-  async buyCurrency (symbol) {
-    let id = uuid()
-    let worker = new Worker(id, symbol)
-    this.workerList.push(worker)
-  }
-
   _getWhiteList (whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList) {
     let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, this.longVolSymbolNo), ...volumeWhiteList4H.slice(0, this.shortVolSymbolNo)])
     /*
@@ -239,15 +233,31 @@ module.exports = class Manager {
 
     return buyingPool
   }
-
-  async _createPartiallySellPromise (worker, toSellAmount) {
-    
-    /* 进入一个function rearrangeWorkersBTC，让每个worker先取消orders，然后卖出百分比，然后再设置orders */
+  /**
+   * 为买新币筹措BTC：让worker取消掉止盈orders，卖掉部分现有币，并重新创建止盈order
+   * @param {*} worker
+   * @param {*} toSellBTCAmount
+   */
+  async _createPartiallySellPromise (worker, toSellBTCAmount) {
+    let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol: worker.symbol})
+    await worker.cancelCutProfitOrders()
+    await worker.marketSell(ohlcvMAs, toSellBTCAmount)
+    await worker.createCutProfitOrders(ohlcvMAs)
   }
+
+  /**
+   * 创建worker，买入币，并创建止盈
+   * @param {*} pickedSymbol
+   * @param {*} BTCForEachWorker
+   */
   async _createWorkersToBuySymbols (pickedSymbol, BTCForEachWorker) {
-    // newPlotDot.event = `Buy in ${pickedTrade.symbol}`
-    // newPlotDot.price = (spentBTC / boughtAmount)
-    // newPlotDot.value = BTCAmount
+    let id = uuid()
+    let worker = new Worker(id, pickedSymbol, this.exchange, this.dynamicProfitList, BTCForEachWorker)
+    this.workerList.push(worker)
+
+    let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol: worker.symbol})
+    await worker.marketBuy(ohlcvMAs)
+    await worker.createCutProfitOrders(ohlcvMAs)
   }
 
   /**
@@ -272,7 +282,7 @@ module.exports = class Manager {
        * 如果BTC不够，则让现有worker卖出一部分持有币
        */
       let requiredBTC = BTCForEachWorker * pickedSymbols.length
-      if (requiredBTC < balanceBTC) {
+      if (requiredBTC > balanceBTC) {
         /**
          * 让现有worker卖出部分币，好抓住新机会
          */
@@ -280,16 +290,16 @@ module.exports = class Manager {
         let getBTCpromises = []
         for (let worker of this.workerList) {
           if (worker.remainingBTC > BTCForEachWorker) {
-            let toSellAmount = worker.remainingBTC - BTCForEachWorker
-            getBTCpromises.push(this._createPartiallySellPromise(worker, toSellAmount))
-            neededAmount -= toSellAmount
+            let toSellBTCAmount = worker.remainingBTC - BTCForEachWorker
+            getBTCpromises.push(this._createPartiallySellPromise(worker, toSellBTCAmount))
+            neededAmount -= toSellBTCAmount
             if (neededAmount < 0) { // 攒够了足够多的BTC
               break
             }
           }
         }
         await Promise.all(getBTCpromises)
-        balanceBTC = this.loadBalance()
+        balanceBTC = await this.loadBalance()
       }
 
       /**
@@ -317,6 +327,16 @@ module.exports = class Manager {
 
         let pickedSymbols = this._pickSymbolsFromMarket()// 检查是否有该买的currency
         pickedSymbols = ['ETH/BTC'] // todo remove
+        if (pickedSymbols.length > 0) {
+          await this._buySymbols(pickedSymbols)
+        }
+
+        pickedSymbols = ['LTC/BTC'] // todo remove
+        if (pickedSymbols.length > 0) {
+          await this._buySymbols(pickedSymbols)
+        }
+
+        pickedSymbols = ['ADA/BTC', 'BNB/BTC'] // todo remove
         if (pickedSymbols.length > 0) {
           await this._buySymbols(pickedSymbols)
         }

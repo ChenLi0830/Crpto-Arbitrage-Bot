@@ -310,10 +310,7 @@ module.exports = class Manager {
       await Promise.all(updateWorkerRemainingBTCPromises)
       let totalWorkersHoldedBTC = this.workerList.reduce((sum, worker) => sum + worker.remainingBTC, 0)
       // let workerHoldedBTC = await this.workerList.reduce(async (sum, worker) => sum + worker.getRemainingBTCAmount(), 0)
-      let BTCForEachWorker = (totalWorkersHoldedBTC + balanceBTC) / (pickedSymbols.length + this.workerList.length)
-      if (BTCForEachWorker > this.buyLimitInBTC) {
-        BTCForEachWorker = this.buyLimitInBTC
-      }
+      let BTCForEachWorker = Math.min((totalWorkersHoldedBTC + balanceBTC) / (pickedSymbols.length + this.workerList.length), this.buyLimitInBTC)
       /**
        * 如果BTC不够，则让现有worker卖出一部分持有币
        */
@@ -341,7 +338,7 @@ module.exports = class Manager {
       /**
        * 创建workers并买币
        */
-      BTCForEachWorker = balanceBTC / pickedSymbols.length // 每个币要花的BTC
+      BTCForEachWorker = Math.min(balanceBTC / pickedSymbols.length, this.buyLimitInBTC) // 每个币要花的BTC
       let buySymbolPromises = pickedSymbols.map(pickedSymbol => {
         return this._createWorkersToBuySymbols(pickedSymbol, BTCForEachWorker)
       })

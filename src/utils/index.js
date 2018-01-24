@@ -364,7 +364,7 @@ async function fetchNewPointAndAttach (ohlcvMAsList, exchangeId, windows) {
    * */
   let symbols = ohlcvMAsList.map(o => o.symbol)
   let newPointsList = await klineListGetDuringPeriod(exchangeId, symbols, 2)
-  let sliceEnd = ohlcvMAsList[0].timeLine.length - 2
+  let sliceEnd = ohlcvMAsList[0].data.length - 2
 
   let updatedInfoList = ohlcvMAsList.map(ohlcvMAs => {
     // 更新2点，保证前面点的close值为exchange最终值
@@ -372,34 +372,13 @@ async function fetchNewPointAndAttach (ohlcvMAsList, exchangeId, windows) {
 
     /**
      * 当ohlcvMA的最后一个点未更新完毕，则保留点 0 - length-3，最后两点更新
-     * 当ohlcvMA的最后一个点更新完毕时，则保留点 1 - length-2
-     * 利用shift完成
+     * 当ohlcvMA的最后一个点更新完毕时，则保留点 1 - length-2，最后添加两点
      * */
-    let shift = ohlcvMAs.timeLine.slice(-1)[0] !== newPoints.timeLine.slice(-1)[0] ? 1 : 0
-//    console.log('ohlcvMAs.closeLine.slice(-5)', ohlcvMAs.closeLine.slice(-5))
-//    console.log('ohlcvMAs.closeLine.slice(shift, sliceEnd + shift).slice(-3))', ohlcvMAs.closeLine.slice(shift, sliceEnd + shift).slice(-3))
-//    console.log('newPoints.closeLine.slice(-2)', newPoints.closeLine.slice(-2))
-//    process.exit()
+    let shift = ohlcvMAs.data.slice(-1)[0].timeStamp !== newPoints.data.slice(-1)[0].timeStamp ? 1 : 0
     let updatedInfo = {
       ...ohlcvMAs,
-      volumeLine: [...(ohlcvMAs.volumeLine.slice(shift, sliceEnd + shift)), ...newPoints.volumeLine.slice(-2)],
-      closeLine: [...(ohlcvMAs.closeLine.slice(shift, sliceEnd + shift)), ...newPoints.closeLine.slice(-2)],
-      openLine: [...(ohlcvMAs.openLine.slice(shift, sliceEnd + shift)), ...newPoints.openLine.slice(-2)],
-      highLine: [...(ohlcvMAs.highLine.slice(shift, sliceEnd + shift)), ...newPoints.highLine.slice(-2)],
-      lowLine: [...(ohlcvMAs.lowLine.slice(shift, sliceEnd + shift)), ...newPoints.lowLine.slice(-2)],
-      timeLine: [...(ohlcvMAs.timeLine.slice(shift, sliceEnd + shift)), ...newPoints.timeLine.slice(-2)]
+      data: [ ...ohlcvMAs.data.slice(shift, sliceEnd + shift), ...newPoints.data.slice(-2) ]
     }
-
-    let newKlines = {}
-    for (let window of windows) {
-      let endIdx = updatedInfo.closeLine.length
-      let startIdx = updatedInfo.closeLine.length - window
-      let secondToLastPoint = _.mean(updatedInfo.closeLine.slice(startIdx - 1, endIdx - 1))
-      let lastPoint = _.mean(updatedInfo.closeLine.slice(startIdx, endIdx))
-      newKlines[window] = [...ohlcvMAs.klines[window].slice(shift, sliceEnd + shift), secondToLastPoint, lastPoint]
-    }
-
-    updatedInfo.klines = newKlines
     return updatedInfo
   })
 
@@ -417,7 +396,7 @@ function calcMovingAverge (ohlcvList, windows) {
     for (let i = 0; i < closeList.length; i++) {
       for (let window of windows) {
         if (i >= window - 1) {
-          let MA = _.mean(closeList.slice(i - window + 1, i))
+          let MA = _.mean(closeList.slice(i - window + 1, i + 1))
           ohlcvs.data[i][`MA${window}`] = MA
         }
       }

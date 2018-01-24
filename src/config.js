@@ -35,10 +35,10 @@ let longVolSymbolNo = 10 // 用长期vol选多少个候选币
 let shortVolSymbolNo = 2 // 用短期vol选多少个候选币
 let longVolWindow = 24 * 60 / 5 // 长期vol window是多长
 let shortVolWindow = 4 * 60 / 5 // 短期vol window是多长
-let logTopVol = false //  是否显示 Volume 白名单候选人
-let logTopVolWindow = 15 / 5 // 显示 Volume 白名单候选人，观察几个点
-let logTopVolSymbolNumber = 10 // 显示 Volume 白名单候选人，显示几个
-let logTopVolThreshold
+let logTopVol = false //  是否显示 Volume 白名单候选币
+let logTopVolWindow = 15 / 5 // 显示 Volume 白名单候选币，观察几个点
+let logTopVolSymbolNumber = 10 // 显示 Volume 白名单候选币，显示几个
+let logTopVolThreshold // 显示 Volume 白名单候选币，threshold
 let volWindow = 48 // volume均线的window
 let buyLimitInBTC = 1 // 最多每个worker花多少BTC买币
 let useLockProfit = false // 是否开启止盈保本

@@ -25,6 +25,7 @@ module.exports = class Worker {
 
     this.currencyAmount = undefined // 买了多少币
     this.buyPrice = undefined // 购买价格
+    this.buyTimeStamp = undefined // 购买时k线的timeStamp
     this.limitOrders = []
     this.done = false
     this.orderFilledAmount = 0 // 创建的limit sell order被filled了多少
@@ -87,6 +88,7 @@ module.exports = class Worker {
 
     this.buyPrice = weightedPrice
     this.currencyAmount = boughtAmount
+    this.buyTimeStamp = ohlcvMAs.data.slice(-1)[0].timeStamp
     log(`--- Finished task: Worker finish buying ${this.currencyAmount} ${this.symbol} at the price: ${this.buyPrice}; Total BTC of this worker: ${this.BTCAmount}`.green)
   }
 
@@ -162,8 +164,6 @@ module.exports = class Worker {
     }
 
     this.BTCAmount = this.BTCAmount - sellAmount * ohlcvMAs.data.slice(-1)[0].close
-    this.limitOrders = []
-    this.orderFilledAmount = 0
   }
 
   /**
@@ -225,6 +225,9 @@ module.exports = class Worker {
     let cancelOrderPromises = orderIds.map(orderId => retryMutationTaskIfTimeout(this.exchange, 'cancelOrder', [orderId, this.symbol, {'recvWindow': 60*10*1000}]))
 
     let results = await Promise.all(cancelOrderPromises)
+
+    this.limitOrders = []
+    this.orderFilledAmount = 0
 
     log(`--- Finished task: Worker for ${this.symbol} finished cancelling open orders`.green)
   }

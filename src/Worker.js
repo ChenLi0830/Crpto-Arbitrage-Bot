@@ -88,7 +88,7 @@ module.exports = class Worker {
     this.buyPrice = weightedPrice
     this.currencyAmount = boughtAmount
     this.buyTimeStamp = ohlcvMAs.data.slice(-1)[0].timeStamp
-    log(`--- Finished task: Worker finish buying ${this.currencyAmount} ${this.symbol} at the price: ${this.buyPrice}; Total BTC of this worker: ${this.BTCAmount}`.green)
+    log(`--- Finished task: Worker finish buying ${this.currencyAmount} ${this.symbol} at the price: ${this.buyPrice}; Total BTC of this worker: ${this.BTCAmount}\n`.green)
   }
 
   async updateCutProfitFilledAmount () {
@@ -163,6 +163,7 @@ module.exports = class Worker {
     }
 
     this.BTCAmount = this.BTCAmount - sellAmount * ohlcvMAs.data.slice(-1)[0].close
+    this.currencyAmount = this.currencyAmount - sellAmount
   }
 
   /**
@@ -200,8 +201,9 @@ module.exports = class Worker {
       }))
 
       this.limitOrders = limitOrders
+      this.orderFilledAmount = 0
 
-      log(`--- Finished task: Worker for ${this.symbol} finished creating limit orders ${JSON.stringify(limitOrders)}`.green)
+      log(`--- Finished task: Worker for ${this.symbol} finished creating limit orders ${JSON.stringify(limitOrders)}\n`.green)
     } catch (error) {
       console.log(error)
     }
@@ -228,6 +230,6 @@ module.exports = class Worker {
     this.limitOrders = []
     this.orderFilledAmount = 0
 
-    log(`--- Finished task: Worker for ${this.symbol} finished cancelling open orders`.green)
+    log(`--- Finished task: Worker for ${this.symbol} finished cancelling open orders\n`.green)
   }
 }

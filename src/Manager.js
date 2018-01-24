@@ -394,6 +394,7 @@ module.exports = class Manager {
   async _workersSellAndRemove (toSellWorkers) {
     let workerSellPromises = toSellWorkers.map(async worker => {
       let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol: worker.symbol})
+      await worker.cancelCutProfitOrders()
       return worker.marketSell(ohlcvMAs)
     })
     await Promise.all(workerSellPromises)
@@ -405,34 +406,28 @@ module.exports = class Manager {
   }
 
   async start () {
+    let initBuy = [] // todo remove
     while (true) {
       try {
         await this.fetchData()
-        // 检查是否有改卖的币
-        // 如果有，则创建promises，卖掉，并更新worker
-
-        logSymbolsBasedOnVolPeriod(this.ohlcvMAsList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
-
-        let pickedSymbols = this._pickSymbolsFromMarket()// 检查是否有该买的currency
-        if (pickedSymbols.length > 0) {
-          await this._buySymbols(pickedSymbols)
-        }
-
+        /**
+         * 检查是否需要卖币
+         */
         let toSellWorkers = await this._checkIfWorkersShouldSell()
+        /**
+         * 卖币
+         */
         if (toSellWorkers.length > 0) {
           await this._workersSellAndRemove(toSellWorkers)
         }
-
-        pickedSymbols = ['ETH/BTC'] // todo remove
-        if (pickedSymbols.length > 0) {
-          await this._buySymbols(pickedSymbols)
-        }
-        pickedSymbols = ['LTC/BTC'] // todo remove
-        if (pickedSymbols.length > 0) {
-          await this._buySymbols(pickedSymbols)
-        }
-
-        pickedSymbols = ['ADA/BTC', 'BNB/BTC'] // todo remove
+        /**
+         * 检查是否需要买币
+         */
+        logSymbolsBasedOnVolPeriod(this.ohlcvMAsList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
+        let pickedSymbols = this._pickSymbolsFromMarket()// 检查是否有该买的currency
+        /**
+         * 买币
+         */
         if (pickedSymbols.length > 0) {
           await this._buySymbols(pickedSymbols)
         }

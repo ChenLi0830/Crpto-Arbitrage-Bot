@@ -30,8 +30,7 @@ let padding = Math.max(...windows)
 //      'MANA/BTC'
 //  ]
 let whiteList = []
-let blackList = []
-let useVolAsCriteria = true // 是否用volume作为选币依据
+let blackList = ['ETH/BTC', 'BNB/BTC']
 let longVolSymbolNo = 10 // 用长期vol选多少个候选币
 let shortVolSymbolNo = 2 // 用短期vol选多少个候选币
 let longVolWindow = 24 * 60 / 5 // 长期vol window是多长
@@ -43,6 +42,7 @@ let logTopVolThreshold
 let volWindow = 48 // volume均线的window
 let buyLimitInBTC = 1 // 最多每个worker花多少BTC买币
 let useLockProfit = false // 是否开启止盈保本
+let useVolAsCriteria = true // 是否用volume作为选币依据
 /**
  * 止盈点
  * */

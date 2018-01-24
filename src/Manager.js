@@ -139,6 +139,10 @@ module.exports = class Manager {
      * 生成最终白名单
      */
     let whiteListSet = new Set([...whiteList, ...volumeWhiteListLong, ...volumeWhiteListShort])
+    /*
+    * 删除黑名单中的部分
+    * */
+    blackList && blackList.forEach(symbol => whiteListSet.delete(symbol))
     return [...whiteListSet]
   }
 
@@ -201,6 +205,7 @@ module.exports = class Manager {
     else {
       let whiteList = _.filter(this.exchange.symbols, o => o.endsWith('/BTC'))
       this.symbolPool = this._getWhiteList(whiteList, [], [], this.blackList)
+      log(`symbolPool: all except blackList, ${this.symbolPool.length} symbols in total`.yellow)
     }
 
     /**

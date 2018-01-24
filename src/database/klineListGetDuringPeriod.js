@@ -132,6 +132,10 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
     })
 
     let ohlcvList = await Promise.all(promises)
+    /**
+     * 去掉长度不够的币
+     */
+    ohlcvList = _.filter(ohlcvList, ohlcv => ohlcv.data.length >= numberOfPoints)
 
     /**
      * 如果多获取了一个点，则截掉

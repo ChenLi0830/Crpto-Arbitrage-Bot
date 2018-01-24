@@ -25,6 +25,16 @@ const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
 
 module.exports = class Manager {
   constructor (exchangeId = 'binance', credentials, params) {
+    this.exchangeId = exchangeId
+    this.exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials))
+    this.ohlcvMAsList = [] // 记录所有symbols的k线和MA
+    this.workerList = [] // 记录所有active的worker
+    this.eventList = [] // 记录买币和卖币events
+    this.symbolPool = [] // 统计所有白名单黑名单后，最终会从这个pool里挑选币
+    this.updateParams(params) // 更新所有params里包含的参数
+  }
+
+  updateParams (params) {
     const {
       numberOfPoints,
       padding,
@@ -46,8 +56,6 @@ module.exports = class Manager {
       useLockProfit = false
     } = params
 
-    this.exchangeId = exchangeId
-    this.exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials))
     this.numberOfPoints = numberOfPoints
     this.padding = padding
     this.windows = windows
@@ -57,7 +65,6 @@ module.exports = class Manager {
     this.buyLimitInBTC = buyLimitInBTC
     this.dynamicProfitList = dynamicProfitList
     this.useLockProfit = useLockProfit
-
     // Vol相关
     this.useVolAsCriteria = useVolAsCriteria
     this.longVolSymbolNo = longVolSymbolNo
@@ -68,11 +75,29 @@ module.exports = class Manager {
     this.logTopVolWindow = logTopVolWindow
     this.logTopVolSymbolNumber = logTopVolSymbolNumber
     this.logTopVolThreshold = logTopVolThreshold
+  }
 
-    this.ohlcvMAsList = [] // 记录所有symbols的k线和MA
-    this.workerList = [] // 记录所有active的worker
-    this.eventList = [] // 记录买币和卖币events
-    this.symbolPool = [] // 统计所有白名单黑名单后，最终会从这个pool里挑选币
+  _hotReloadParams () {
+    try {
+      let cachedModule = require.cache[require.resolve('./config')]
+      if (cachedModule) {
+        delete require.cache[require.resolve('./config')].parent.children // Clear require cache
+        delete require.cache[require.resolve('./config')]
+      }
+      let config
+      while (true) { // 用while读config，保证读取出的config是有效的
+        try {
+          config = require('./config')
+          break
+        } catch (error) {
+          console.log('Reading config file Error')
+        }
+      }
+      this.updateParams(config)
+    }
+    catch (error) {
+      console.log(error)
+    }
   }
 
   /**
@@ -400,6 +425,18 @@ module.exports = class Manager {
     }
   }
 
+  /**
+   * 将当前的状态log到terminal里
+   */
+  _logState () {
+    let timeEpoch = Number(this.ohlcvMAsList[0].data.slice(-1)[0].timeStamp)
+    let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
+    log(`Current Time: ${moment().format('MMMM Do YYYY, h:mm:ss a')}, Data time: ${currentTime}`.green)
+    if (this.workerList.length > 0) {
+      log(`Currently holding ${this.workerList.map(o => o.symbol).join(' ')}`)
+    }
+  }
+
   async start () {
     let initBuy = [] // todo remove
 
@@ -412,14 +449,8 @@ module.exports = class Manager {
     while (true) {
       try {
         /**
-         * 检查内存
+         * 获取新数据
          */
-        checkMemory()
-
-        if (this.workerList.length > 0) {
-          log(`Currently holding ${this.workerList.map(o => o.symbol).join(' ')}`)
-        }
-
         await this.fetchData()
         /**
          * 检查是否需要卖币
@@ -429,7 +460,9 @@ module.exports = class Manager {
          * 卖币
          */
         if (toSellWorkers.length > 0) {
+          this._logState()
           await this._workersSellAndRemove(toSellWorkers)
+          this._logState()
         }
         /**
          * 检查是否需要买币
@@ -440,8 +473,18 @@ module.exports = class Manager {
          * 买币
          */
         if (pickedSymbols.length > 0) {
+          this._logState()
           await this._buySymbols(pickedSymbols)
+          this._logState()
         }
+        /**
+         * 热更新参数
+         */
+        this._hotReloadParams()
+        /**
+         * 检查内存
+         */
+        checkMemory()
       } catch (error) {
         console.log('Major error', error)
         break

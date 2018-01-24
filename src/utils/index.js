@@ -421,6 +421,31 @@ function checkMemory () {
   }
 }
 
+/**
+ * 计算有多少连续增长的k线
+ * @param {*} ohlcvMAs
+ * @param {*} observeWindow
+ */
+function calcContinuousKlineIncrease (ohlcvMAs, observeWindow) {
+  let continousIncreaseList = []
+  let increaseCount = 0
+  for (let i = ohlcvMAs.data.length - observeWindow; i < ohlcvMAs.data.length; i++) {
+    if (ohlcvMAs.data[i].close > ohlcvMAs.data[i - 1].close && ohlcvMAs.data[i].close > ohlcvMAs.data[i].open) {
+      increaseCount++
+    } else {
+      if (increaseCount > 0) {
+        continousIncreaseList.push(increaseCount)
+      }
+      increaseCount = 0
+    }
+  }
+  return {
+    mean: _.mean(continousIncreaseList),
+    sum: _.sum(continousIncreaseList),
+    median: continousIncreaseList.sort()[Math.trunc(continousIncreaseList.length / 2)]
+  }
+}
+
 module.exports = {
   getMarkets,
   saveJsonToCSV,
@@ -440,5 +465,6 @@ module.exports = {
   fetchNewPointAndAttach,
   calcMovingAverge,
   logSymbolsBasedOnVolPeriod,
-  checkMemory
+  checkMemory,
+  calcContinuousKlineIncrease
 }

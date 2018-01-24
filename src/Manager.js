@@ -18,7 +18,8 @@ const {
   fetchNewPointAndAttach,
   calcMovingAverge,
   logSymbolsBasedOnVolPeriod,
-  checkMemory
+  checkMemory,
+  calcContinuousKlineIncrease
 } = utils
 
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
@@ -53,7 +54,9 @@ module.exports = class Manager {
       volWindow = 48, // volume均线的window
       buyLimitInBTC = 1, // 最多每个worker花多少BTC买币
       dynamicProfitList,
-      useLockProfit = false
+      useLockProfit = false,
+      contiKlineObserveWindow = 4 * 60 / 5, //连续增长k线看多少点
+      logInterval = 300 * 1000
     } = params
 
     this.numberOfPoints = numberOfPoints
@@ -65,6 +68,8 @@ module.exports = class Manager {
     this.buyLimitInBTC = buyLimitInBTC
     this.dynamicProfitList = dynamicProfitList
     this.useLockProfit = useLockProfit
+    this.contiKlineObserveWindow = contiKlineObserveWindow
+    this.logInterval = logInterval
     // Vol相关
     this.useVolAsCriteria = useVolAsCriteria
     this.longVolSymbolNo = longVolSymbolNo
@@ -436,17 +441,26 @@ module.exports = class Manager {
     if (this.workerList.length > 0) {
       log(`Currently holding ${this.workerList.map(o => o.symbol).join(' ')}`)
     }
+    log(`SymbolPool: ${this.symbolPool}`.yellow)
+  }
+
+  _logMarket () {
+    for (let symbol of this.symbolPool) {
+      let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
+      let meanKlineIncrease = calcContinuousKlineIncrease(ohlcvMAs, this.contiKlineObserveWindow)
+      log(`${symbol} increase: ${JSON.stringify(meanKlineIncrease)}`)
+    }
+    // this.ohlcvMAsList
   }
 
   async start () {
-    let initBuy = [] // todo remove
+    let logTimer = new Date().getTime() - this.logInterval
 
     log(`---------- Running in Production ----------`.blue)
     log(`---------- Fetching Balance ----------`.green)
     let balance = await this.loadBalance()
     log(`---        BTC Balance - ${balance}`.green)
     log(`---------- Fetching Balance ---------- \n`.green)
-
     while (true) {
       try {
         /**
@@ -477,6 +491,14 @@ module.exports = class Manager {
           this._logState()
           await this._buySymbols(pickedSymbols)
           this._logState()
+        }
+        /**
+         * Log市场情况和当前状态
+         */
+        if (new Date().getTime() - logTimer > this.logInterval) {
+          logTimer = new Date().getTime()
+          this._logState()
+          this._logMarket()
         }
         /**
          * 热更新参数

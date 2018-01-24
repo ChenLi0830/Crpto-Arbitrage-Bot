@@ -11,7 +11,7 @@ const api = require('./api')
 const player = require('play-sound')(opts = {})
 
 module.exports = class Worker {
-  constructor (id, symbol, exchange, updateWorkerList, dynamicProfitList, BTCAmount, params) {
+  constructor (id, symbol, exchange, dynamicProfitList, BTCAmount, params = {}) {
     const {
       maxPartialSellPercent = 50
     } = params
@@ -19,7 +19,7 @@ module.exports = class Worker {
     this.symbol = symbol
     this.exchange = exchange
     this.BTCAmount = BTCAmount
-    this.onWorkerUpdate = updateWorkerList // 当worker完成大变动时，通知Manager
+    // this.onWorkerUpdate = updateWorkerList // 当worker完成大变动时，通知Manager
     this.dynamicProfitList = dynamicProfitList
     this.maxPartialSellPercent = maxPartialSellPercent
 
@@ -139,9 +139,12 @@ module.exports = class Worker {
     }
 
     log(`--- Start Task: Worker for ${this.symbol} is selling ${targetCurrency}, balance ${targetBalance}, sell amount ${sellAmount}`.green)
-    player.play('./src/Purr.aiff', (err) => {
-      if (err) throw err
-    })
+
+    if (targetBTCAmount === undefined) { // 全卖时播放声音
+      player.play('./src/Purr.aiff', (err) => {
+        if (err) throw err
+      })
+    }
 
     let minSellAmount = this.exchange.markets[this.symbol].limits.amount.min
     if (sellAmount < minSellAmount) {

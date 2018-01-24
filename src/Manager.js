@@ -133,12 +133,21 @@ module.exports = class Manager {
     this.ohlcvMAsList = calcMovingAverge(ohlcvList, this.windows)
   }
 
-  _getWhiteList (whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList) {
-    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, this.longVolSymbolNo), ...volumeWhiteList4H.slice(0, this.shortVolSymbolNo)])
-    /*
-    * 删除黑名单中的部分
-    * */
-    blackList && blackList.forEach(symbol => whiteListSet.delete(symbol))
+  _getWhiteList (whiteList, volumeWhiteListLong, volumeWhiteListShort, blackList) {
+    /**
+     * volumeWhiteListLong 排除掉黑名单已经包括的部分
+     */
+    volumeWhiteListLong = _.filter(volumeWhiteListLong, o => blackList.indexOf(o) === -1).slice(0, this.longVolSymbolNo)
+    /**
+     * volumeWhiteListShort 排除掉黑名单及volumeWhiteListLong已经包括的部分
+     */
+    volumeWhiteListShort = _.filter(volumeWhiteListShort, o => {
+      return volumeWhiteListLong.indexOf(o) === -1 && blackList.indexOf(o) === -1
+    }).slice(0, this.shortVolSymbolNo)
+    /**
+     * 生成最终白名单
+     */
+    let whiteListSet = new Set([...whiteList, ...volumeWhiteListLong, ...volumeWhiteListShort])
     return [...whiteListSet]
   }
 
@@ -192,7 +201,6 @@ module.exports = class Manager {
     if (this.useVolAsCriteria) {
       let topVolumeList = getTopVolume(this.ohlcvMAsList, undefined, this.longVolWindow)
       let volumeWhiteListLong = (topVolumeList).map(o => `${o.symbol}`)
-
       topVolumeList = getTopVolume(this.ohlcvMAsList, undefined, this.shortVolWindow)
       let volumeWhiteListShort = (topVolumeList).map(o => `${o.symbol}`)
 
@@ -319,12 +327,16 @@ module.exports = class Manager {
     }
   }
 
+  /**
+   * 创建promise，如果worker应该卖，就return worker，否则return undefined
+   * @param {Object} worker
+   */
   async createReturnWorkerIfShouldSellPromise (worker) {
     let currentOhlcvMAs = _.find(this.ohlcvMAsList, {symbol: worker.symbol})
 
     let shouldLockProfit = false
     /**
-     * 是否锁定收益：止盈线被触发，且价格小于等于成本价 (lastPickedTrade.buyPrice) ?
+     * 是否锁定收益：止盈线被触发，且当前价格小于等于成本价 (lastPickedTrade.buyPrice)
      * */
     if (this.useLockProfit) {
       let priceDropThroughCost = currentOhlcvMAs.data.slice(-1)[0].close <= worker.buyPrice
@@ -379,7 +391,7 @@ module.exports = class Manager {
    * toSellWorkers卖币，并从this.workerList里删除这些workers
    * @param {*} toSellWorkers
    */
-  async _workersSell (toSellWorkers) {
+  async _workersSellAndRemove (toSellWorkers) {
     let workerSellPromises = toSellWorkers.map(async worker => {
       let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol: worker.symbol})
       return worker.marketSell(ohlcvMAs)
@@ -408,7 +420,7 @@ module.exports = class Manager {
 
         let toSellWorkers = await this._checkIfWorkersShouldSell()
         if (toSellWorkers.length > 0) {
-          await this._workersSell(toSellWorkers)
+          await this._workersSellAndRemove(toSellWorkers)
         }
 
         pickedSymbols = ['ETH/BTC'] // todo remove

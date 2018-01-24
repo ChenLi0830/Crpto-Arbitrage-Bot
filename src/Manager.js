@@ -40,13 +40,14 @@ module.exports = class Manager {
       numberOfPoints,
       padding,
       windows,
-      useVolAsCriteria = false, // todo 改回true
+      useVolAsCriteria = true,
       whiteList = [],
       blackList = [],
       longVolSymbolNo = 10, // 用长期vol选多少个候选币
       shortVolSymbolNo = 2, // 用短期vol选多少个候选币
       longVolWindow = 24 * 60 / 5,
       shortVolWindow = 4 * 60 / 5,
+      logTopVol = false,
       logTopVolWindow = 15 / 5,
       logTopVolSymbolNumber = 10,
       logTopVolThreshold,
@@ -74,6 +75,7 @@ module.exports = class Manager {
     this.shortVolSymbolNo = shortVolSymbolNo
     this.longVolWindow = longVolWindow
     this.shortVolWindow = shortVolWindow
+    this.logTopVol = logTopVol
     this.logTopVolWindow = logTopVolWindow
     this.logTopVolSymbolNumber = logTopVolSymbolNumber
     this.logTopVolThreshold = logTopVolThreshold
@@ -220,7 +222,7 @@ module.exports = class Manager {
       /**
        * 过滤不在名单候选池中的币
        * */
-      if (this.symbolPool > 0) {
+      if (this.symbolPool.length > 0) {
         if (!this.symbolPool.includes(ohlcvMAs.symbol)) {
           continue
         }
@@ -383,7 +385,6 @@ module.exports = class Manager {
     )
     let checkWorkerShouldSellResult = await Promise.all(checkWorkerShouldSellPromises)
     let shouldSellWorkers = _.filter(checkWorkerShouldSellResult, o => !!o)
-    console.log('workerShouldSellList', shouldSellWorkers.map(worker => worker.symbol))
     return shouldSellWorkers
   }
 
@@ -407,6 +408,13 @@ module.exports = class Manager {
 
   async start () {
     let initBuy = [] // todo remove
+
+    log(`---------- Running in Production ----------`.blue)
+    log(`---------- Fetching Balance ----------`.green)
+    let balance = await this.loadBalance()
+    log(`---        BTC Balance - ${balance}`.green)
+    log(`---------- Fetching Balance ---------- \n`.green)
+
     while (true) {
       try {
         await this.fetchData()
@@ -423,7 +431,7 @@ module.exports = class Manager {
         /**
          * 检查是否需要买币
          */
-        logSymbolsBasedOnVolPeriod(this.ohlcvMAsList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
+        this.logTopVol && logSymbolsBasedOnVolPeriod(this.ohlcvMAsList, this.logTopVolWindow, this.logTopVolSymbolNumber, this.logTopVolThreshold, this.symbolPool)
         let pickedSymbols = this._pickSymbolsFromMarket()// 检查是否有该买的currency
         /**
          * 买币

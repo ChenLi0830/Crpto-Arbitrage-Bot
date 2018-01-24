@@ -19,7 +19,6 @@ module.exports = class Worker {
     this.symbol = symbol
     this.exchange = exchange
     this.BTCAmount = BTCAmount
-    // this.onWorkerUpdate = updateWorkerList // 当worker完成大变动时，通知Manager
     this.dynamicProfitList = dynamicProfitList
     this.maxPartialSellPercent = maxPartialSellPercent
 
@@ -27,7 +26,6 @@ module.exports = class Worker {
     this.buyPrice = undefined // 购买价格
     this.buyTimeStamp = undefined // 购买时k线的timeStamp
     this.limitOrders = []
-    this.done = false
     this.orderFilledAmount = 0 // 创建的limit sell order被filled了多少
     this.remainingBTC = BTCAmount
   }

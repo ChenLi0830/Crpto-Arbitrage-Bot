@@ -23,26 +23,26 @@ let numberOfPoints = 24 * 60 / intervalInMins
 let padding = Math.max(...windows)
 
 /**
- * 设置白名单
+ * 常换变量
  * */
-let whiteList = []
-let blackList = []
-let useVolAsCriteria = true
-let longVolSymbolNo = 10 // 用长期vol选多少个候选币
-let shortVolSymbolNo = 2 // 用短期vol选多少个候选币
-let longVolWindow = 24 * 60 / 5 // 长期vol window是多长
-let shortVolWindow = 4 * 60 / 5 // 短期vol window是多长
-let logTopVolWindow = 15 / 5 // 显示 Volume 白名单候选人，window多长
-let logTopVolSymbolNumber = 10 // 显示 Volume 白名单候选人，显示几个
-let logTopVolThreshold
-let volWindow = 48 // volume均线的window
-let buyLimitInBTC = 1 // 最多每个worker花多少BTC买币
-
 //  let whiteList = [
 //      'ETH/BTC',
 //      'MANA/BTC'
 //  ]
-
+let whiteList = []
+let blackList = []
+let useVolAsCriteria = true // 是否用volume作为选币依据
+let longVolSymbolNo = 10 // 用长期vol选多少个候选币
+let shortVolSymbolNo = 2 // 用短期vol选多少个候选币
+let longVolWindow = 24 * 60 / 5 // 长期vol window是多长
+let shortVolWindow = 4 * 60 / 5 // 短期vol window是多长
+let logTopVol = false //  是否显示 Volume 白名单候选人
+let logTopVolWindow = 15 / 5 // 显示 Volume 白名单候选人，观察几个点
+let logTopVolSymbolNumber = 10 // 显示 Volume 白名单候选人，显示几个
+let logTopVolThreshold
+let volWindow = 48 // volume均线的window
+let buyLimitInBTC = 1 // 最多每个worker花多少BTC买币
+let useLockProfit = false // 是否开启止盈保本
 /**
  * 止盈点
  * */
@@ -86,9 +86,11 @@ module.exports = {
   shortVolSymbolNo,
   longVolWindow,
   shortVolWindow,
+  logTopVol,
   logTopVolWindow,
   logTopVolSymbolNumber,
   logTopVolThreshold,
   volWindow,
   buyLimitInBTC,
+  useLockProfit
 }

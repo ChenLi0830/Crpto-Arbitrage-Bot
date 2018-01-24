@@ -40,7 +40,7 @@ let logTopVolWindow = 15 / 5 // 显示 Volume 白名单候选币，观察几个�
 let logTopVolSymbolNumber = 10 // 显示 Volume 白名单候选币，显示几个
 let logTopVolThreshold // 显示 Volume 白名单候选币，threshold
 let volWindow = 48 // volume均线的window
-let buyLimitInBTC = 1 // 最多每个worker花多少BTC买币
+let buyLimitInBTC = 0.1 // 最多每个worker花多少BTC买币
 let useLockProfit = false // 是否开启止盈保本
 let useVolAsCriteria = true // 是否用volume作为选币依据
 /**
@@ -48,16 +48,16 @@ let useVolAsCriteria = true // 是否用volume作为选币依据
  * */
 let dynamicProfitList = [
   {
+    multiplier: 1,
+    percent: 70
+  },
+  {
+    multiplier: 2,
+    percent: 15
+  },
+  {
     multiplier: 3.5,
-    percent: 30
-  },
-  {
-    multiplier: 4,
-    percent: 40
-  },
-  {
-    multiplier: 5.5,
-    percent: 20
+    percent: 5
   }
 ]
 

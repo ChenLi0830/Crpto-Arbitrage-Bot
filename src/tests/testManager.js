@@ -92,13 +92,14 @@ async function testManager () {
   /**
    * 测试买卖，取消和创建orders
    */
-  // await manager.fetchData()
+  await manager.fetchData()
   // await manager._buySymbols(['ETH/BTC', 'ADA/BTC', 'EVX/BTC'])
-  // await manager._buySymbols(['ADA/BTC'])
+  await manager._buySymbols(['ADA/BTC'])
   // let ethWorker = _.find(manager.workerList, o => o.symbol === 'ETH/BTC')
   // await manager._workersSellAndRemove([ethWorker])
   // await manager._buySymbols(['EVX/BTC'])
-  // let adaWorker = _.find(manager.workerList, o => o.symbol === 'ADA/BTC')
+  let adaWorker = _.find(manager.workerList, o => o.symbol === 'ADA/BTC')
+  await manager._workersSellAndRemove([adaWorker])
   // let evxWorker = _.find(manager.workerList, o => o.symbol === 'EVX/BTC')
   // await manager._workersSellAndRemove([adaWorker, evxWorker])
   // // await manager._buySymbols(['ADA/BTC'])
@@ -112,7 +113,7 @@ async function testManager () {
   /**
    * 测试运行
    */
-  await manager.start()
+  // await manager.start()
   // await manager.loadBalance()
   // await manager.fetchData()
   // console.log('manager.ohlcvMAList.length', manager.ohlcvMAList.length)

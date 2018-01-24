@@ -384,7 +384,7 @@ module.exports = class Manager {
       let mediumMA = `MA${this.windows[1]}`
       dropThroughKline = currentOhlcvMAs.data[sellKline].close < currentOhlcvMAs.data[sellKline][fastMA]
       fastMADropThroughMiddleMA = currentOhlcvMAs.data[sellKline][fastMA] < currentOhlcvMAs.data[sellKline][mediumMA] && currentOhlcvMAs.data[sellKline - 1][fastMA] > currentOhlcvMAs.data[sellKline - 1][mediumMA]
-      // volumeLessThanPrevPoint = (currentOhlcvMAs.data[sellKline].volume / currentOhlcvMAs.data[sellKline - 1].volume) < 0.5
+      volumeLessThanPrevPoint = (currentOhlcvMAs.data[sellKline].volume / currentOhlcvMAs.data[sellKline - 1].volume) < 0.5
     }
     /**
      * 如果任一条件满足，则返回worker

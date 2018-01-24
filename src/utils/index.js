@@ -440,7 +440,7 @@ function calcContinuousKlineIncrease (ohlcvMAs, observeWindow) {
     }
   }
   return {
-    mean: _.mean(continousIncreaseList),
+    mean: _.mean(continousIncreaseList).toFixed(2),
     sum: _.sum(continousIncreaseList),
     median: continousIncreaseList.sort()[Math.trunc(continousIncreaseList.length / 2)]
   }

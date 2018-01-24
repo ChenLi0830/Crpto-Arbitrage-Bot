@@ -1,7 +1,5 @@
 // 'use strict'
 const ccxt = require('ccxt')
-const asciichart = require('asciichart')
-const asTable = require('as-table')
 const log = require('ololog').configure({locate: false})
 const api = require('./api')
 const fs = require('fs')
@@ -9,27 +7,18 @@ const _ = require('lodash')
 const {saveJsonToCSV} = require('./utils')
 require('ansicolor').nice
 const moment = require('moment')
-const credentials = require('../credentials')
 const {MinorError, MajorError} = require('./utils/errors')
 const utils = require('./utils')
-const player = require('play-sound')(opts = {})
 const Worker = require('./Worker')
 const uuid = require('uuid/v4')
 
 const {
-  retryMutationTaskIfTimeout,
   retryQueryTaskIfAnyError,
-  cutExtractedInfoList,
-  getTopVibrated,
   getTopVolume,
-  getTopWeighted,
-  addVibrateValue,
-  addBTCVolValue,
-  generateCutProfitList,
-  addPaddingExtractedInfoList,
   fetchNewPointAndAttach,
   calcMovingAverge,
-  logSymbolsBasedOnVolPeriod
+  logSymbolsBasedOnVolPeriod,
+  checkMemory
 } = utils
 
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
@@ -417,6 +406,15 @@ module.exports = class Manager {
 
     while (true) {
       try {
+        /**
+         * 检查内存
+         */
+        checkMemory()
+
+        if (this.workerList.length > 0) {
+          log(`Currently holding ${this.workerList.map(o => o.symbol).join(' ')}`)
+        }
+
         await this.fetchData()
         /**
          * 检查是否需要卖币

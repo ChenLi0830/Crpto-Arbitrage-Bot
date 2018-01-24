@@ -3,21 +3,24 @@ const Manager = require('./Manager')
 const config = require('./config')
 
 const {
-  windows,
-  numberOfPoints,
-  padding,
-  longVolSymbolNo,
-  shortVolSymbolNo,
-  longVolWindow,
-  shortVolWindow,
-  logTopVolWindow,
-  logTopVolSymbolNumber,
-  logTopVolThreshold,
-  volWindow,
-  buyLimitInBTC,
-  dynamicProfitList,
-  logTopVol,
-  useLockProfit
+    numberOfPoints,
+    padding,
+    windows,
+    volWindow,
+    whiteList,
+    blackList,
+    buyLimitInBTC,
+    dynamicProfitList,
+    useLockProfit,
+    useVolAsCriteria,
+    longVolSymbolNo,
+    shortVolSymbolNo,
+    longVolWindow,
+    shortVolWindow,
+    logTopVol,
+    logTopVolWindow,
+    logTopVolSymbolNumber,
+    logTopVolThreshold,
 } = config
 
 let exchangeId = 'binance'
@@ -25,18 +28,21 @@ let params = {
   numberOfPoints,
   padding,
   windows,
+  volWindow,
+  whiteList,
+  blackList,
+  buyLimitInBTC,
+  dynamicProfitList,
+  useLockProfit,
+  useVolAsCriteria,
   longVolSymbolNo,
   shortVolSymbolNo,
   longVolWindow,
   shortVolWindow,
+  logTopVol,
   logTopVolWindow,
   logTopVolSymbolNumber,
   logTopVolThreshold,
-  volWindow,
-  buyLimitInBTC,
-  dynamicProfitList,
-  logTopVol,
-  useLockProfit
 }
 
 async function main () {

@@ -405,6 +405,20 @@ function calcMovingAverge (ohlcvList, windows) {
   return ohlcvList
 }
 
+function checkMemory () {
+  /**
+   * Determine memory leak
+   * */
+  try {
+    global.gc()
+  } catch (e) {
+    console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
+    process.exit()
+  }
+  var heapUsed = process.memoryUsage().heapUsed
+  console.log('Program is using ' + heapUsed + ' bytes of Heap.')
+}
+
 module.exports = {
   getMarkets,
   saveJsonToCSV,
@@ -423,5 +437,6 @@ module.exports = {
   addPaddingExtractedInfoList,
   fetchNewPointAndAttach,
   calcMovingAverge,
-  logSymbolsBasedOnVolPeriod
+  logSymbolsBasedOnVolPeriod,
+  checkMemory
 }

@@ -175,7 +175,8 @@ module.exports = class Manager {
     return [...whiteListSet]
   }
 
-  klineMathCriteria (ohlcvMAs, klineIdx) {
+  klineMatchCriteria (ohlcvMAs) {
+    let klineIdx = ohlcvMAs.data.length - 1
     /**
      * 检查 volume 条件
      */
@@ -204,18 +205,8 @@ module.exports = class Manager {
    * @param {*} klineIndex 用来判断是否满足条件的kline的Index
    */
   checkBuyingCriteria (ohlcvMAs) {
-    let isNewKline = process.env.PRODUCTION ? ((new Date().getTime() - ohlcvMAs.data.slice(-1)[0].timeStamp) < 45 * 1000) : false
-    let currentIndex = ohlcvMAs.data.length - 1
-    let currentKlineMatchCriteria = this.klineMathCriteria(ohlcvMAs, currentIndex)
-    let prevIndex = currentIndex - 1
-    let prevKlineMatchCriteria = this.klineMathCriteria(ohlcvMAs, prevIndex)
-
-    /*
-    * 如果当前k线满足条件，或如果是刚刚生成的k线，判断它之前的k线是否满足条件，如果是则也买入
-    * */
-    if (currentKlineMatchCriteria || (isNewKline && prevKlineMatchCriteria)) {
-      return true
-    }
+    let currentKlineMatchCriteria = this.klineMatchCriteria(ohlcvMAs)
+    return currentKlineMatchCriteria
   }
 
   _pickSymbolsFromMarket () {

@@ -430,7 +430,7 @@ function calcContinuousKlineIncrease (ohlcvMAs, observeWindow) {
   let continousIncreaseList = []
   let increaseCount = 0
   for (let i = ohlcvMAs.data.length - observeWindow; i < ohlcvMAs.data.length; i++) {
-    if (ohlcvMAs.data[i].close > ohlcvMAs.data[i - 1].close && ohlcvMAs.data[i].close > ohlcvMAs.data[i].open) {
+    if (ohlcvMAs.data[i].close > ohlcvMAs.data[i].open) {
       increaseCount++
     } else {
       if (increaseCount > 0) {

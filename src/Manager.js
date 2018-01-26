@@ -55,8 +55,8 @@ module.exports = class Manager {
       buyLimitInBTC = 1, // 最多每个worker花多少BTC买币
       dynamicProfitList,
       useLockProfit = false,
-      contiKlineObserveWindow = 4 * 60 / 5, //连续增长k线看多少点
-      logInterval = 300 * 1000
+      contiKlineObserveWindow = 4 * 60 / 5, // 连续增长k线看多少点
+      logInterval = 5 * 60 * 1000
     } = params
 
     this.numberOfPoints = numberOfPoints
@@ -147,7 +147,6 @@ module.exports = class Manager {
     else {
       ohlcvList = await fetchNewPointAndAttach(this.ohlcvMAsList, this.exchangeId, this.windows)
     }
-
     /**
      * 计算MA
      */
@@ -389,7 +388,8 @@ module.exports = class Manager {
       let mediumMA = `MA${this.windows[1]}`
       dropThroughKline = currentOhlcvMAs.data[sellKline].close < currentOhlcvMAs.data[sellKline][fastMA]
       fastMADropThroughMiddleMA = currentOhlcvMAs.data[sellKline][fastMA] < currentOhlcvMAs.data[sellKline][mediumMA] && currentOhlcvMAs.data[sellKline - 1][fastMA] > currentOhlcvMAs.data[sellKline - 1][mediumMA]
-      volumeLessThanPrevPoint = (currentOhlcvMAs.data[sellKline].volume / currentOhlcvMAs.data[sellKline - 1].volume) < 0.5
+      // 暂停volume缩小时卖出的条件
+      // volumeLessThanPrevPoint = (currentOhlcvMAs.data[sellKline].volume / currentOhlcvMAs.data[sellKline - 1].volume) < 0.5
     }
     /**
      * 如果任一条件满足，则返回worker
@@ -445,12 +445,19 @@ module.exports = class Manager {
   }
 
   _logMarket () {
+    let klineIncreaseStatList = []
     for (let symbol of this.symbolPool) {
       let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
-      let meanKlineIncrease = calcContinuousKlineIncrease(ohlcvMAs, this.contiKlineObserveWindow)
-      log(`${symbol} increase: ${JSON.stringify(meanKlineIncrease)}`)
+      let klineIncreaseStat = calcContinuousKlineIncrease(ohlcvMAs, this.contiKlineObserveWindow)
+      klineIncreaseStatList.push(klineIncreaseStat)
+      log(`${symbol} increase: ${JSON.stringify(klineIncreaseStat)}`.yellow)
     }
-    // this.ohlcvMAsList
+    let marketStat = {
+      mean: _.mean(klineIncreaseStatList.map(o => Number(o.mean))).toFixed(2),
+      sum: _.mean(klineIncreaseStatList.map(o => Number(o.sum))).toFixed(2),
+      median: _.mean(klineIncreaseStatList.map(o => Number(o.median))).toFixed(2)
+    }
+    log(`market average: ${JSON.stringify(marketStat)}`.yellow)
   }
 
   async start () {
@@ -507,7 +514,7 @@ module.exports = class Manager {
         /**
          * 检查内存
          */
-        checkMemory()
+        // checkMemory()
       } catch (error) {
         console.log('Major error', error)
         break

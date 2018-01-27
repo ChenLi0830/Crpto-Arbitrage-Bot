@@ -29,6 +29,7 @@ let padding = Math.max(...windows)
 //      'ETH/BTC',
 //      'MANA/BTC'
 //  ]
+let exchangeId = 'binance'
 let whiteList = []
 let blackList = ['ETH/BTC', 'BNB/BTC']
 let longVolSymbolNo = 10 // 用长期vol选多少个候选币
@@ -40,20 +41,25 @@ let logTopVolWindow = 15 / 5 // 显示 Volume 白名单候选币，观察几个�
 let logTopVolSymbolNumber = 10 // 显示 Volume 白名单候选币，显示几个
 let logTopVolThreshold // 显示 Volume 白名单候选币，threshold
 let volWindow = 48 // volume均线的window
-let buyLimitInBTC = 0.1 // 最多每个worker花多少BTC买币
+let buyLimitInBTC = 0.02 // 最多每个worker花多少BTC买币
 let useLockProfit = false // 是否开启止盈保本
 let useVolAsCriteria = true // 是否用volume作为选币依据
+let simuBalance = 1 // 初始 BTC Balance
+let simuTradingFee = 0.0005 // 交易费
+let simuDuration = 7 * 24 * 60 * 60 * 1000 // 模拟进行时长，单位为毫秒
+let simuEndTime // 截止至什么时候 in epoch time，undefined默认为截止至当下
+let simuTimeStepSize = 5 * 60 * 1000 // 模拟中每步的步长
 /**
  * 止盈点
  * */
 let dynamicProfitList = [
   {
-    multiplier: 1,
+    multiplier: 1.5,
     percent: 70
   },
   {
     multiplier: 2,
-    percent: 15
+    percent: 20
   },
   {
     multiplier: 3.5,
@@ -76,6 +82,7 @@ module.exports = {
   PLOT_CSV_FILE,
   topVibratedNo,
   fetchKlineBlackList,
+  exchangeId,
   whiteList,
   dynamicProfitList,
   numberOfPoints,
@@ -92,5 +99,10 @@ module.exports = {
   logTopVolThreshold,
   volWindow,
   buyLimitInBTC,
-  useLockProfit
+  useLockProfit,
+  simuBalance,
+  simuTradingFee,
+  simuDuration,
+  simuEndTime,
+  simuTimeStepSize
 }

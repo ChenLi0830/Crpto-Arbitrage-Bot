@@ -4,16 +4,17 @@ const _ = require('lodash')
 const ccxt = require('ccxt')
 
 module.exports = class SimulatedExchange {
-  constructor (exchangeId = 'binance', balance, tradingFee, startTime, endTime, stepSize, params) {
+  constructor (exchangeId = 'binance', simuBalance, simuTradingFee, simuDuration, simuEndTime = new Date().getTime(), simuTimeStepSize, params) {
     this.exchangeId = exchangeId
-    this.balance = balance
-    this.tradingFee = tradingFee
-    this.startTime = startTime
-    this.endTime = endTime
-    this.stepSize = stepSize
+    this.balance = {BTC: simuBalance}
+    this.tradingFee = simuTradingFee
+    this.endTime = simuEndTime
+    this.startTime = this.endTime - simuDuration
+    this.stepSize = simuTimeStepSize
 
     this.symbols = []
     this.markets = {}
+    this.ohlcvMAsListSource = []
   }
 
   async initExchange () {
@@ -21,15 +22,13 @@ module.exports = class SimulatedExchange {
     await exchange.loadMarkets()
     this.symbols = exchange.symbols
     this.markets = exchange.markets
+
+    await _fetchAllNeededData(this.exchangeId, this.startTime, this.endTime)
   }
 
   fetchBalance () {
     return {
-      free: {
-        BTC: {
-
-        }
-      }
+      free: this.balance
     }
   }
 

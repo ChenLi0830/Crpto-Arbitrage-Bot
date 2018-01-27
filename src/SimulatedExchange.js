@@ -2,15 +2,26 @@ const log = require('ololog').configure({locate: false})
 require('ansicolor').nice
 const _ = require('lodash')
 const ccxt = require('ccxt')
+const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
 
 module.exports = class SimulatedExchange {
-  constructor (exchangeId = 'binance', simuBalance, simuTradingFee, simuDuration, simuEndTime = new Date().getTime(), simuTimeStepSize, params) {
+  constructor (
+      exchangeId = 'binance',
+      simuBalance,
+      simuTradingFee,
+      simuDuration,
+      simuEndTime = new Date().getTime(),
+      simuTimeStepSize,
+      intervalInMillesec,
+      params
+    ) {
     this.exchangeId = exchangeId
     this.balance = {BTC: simuBalance}
     this.tradingFee = simuTradingFee
     this.endTime = simuEndTime
     this.startTime = this.endTime - simuDuration
     this.stepSize = simuTimeStepSize
+    this.intervalInMillesec = intervalInMillesec
 
     this.symbols = []
     this.markets = {}
@@ -20,10 +31,14 @@ module.exports = class SimulatedExchange {
   async initExchange () {
     let exchange = new ccxt[this.exchangeId](ccxt.extend({enableRateLimit: true}))
     await exchange.loadMarkets()
-    this.symbols = exchange.symbols
+    this.symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
     this.markets = exchange.markets
 
-    await _fetchAllNeededData(this.exchangeId, this.startTime, this.endTime)
+    /**
+     * 获取整个时间段内，需要的数据
+     */
+    let numberOfPoints = Math.trunc((this.endTime - this.startTime) / this.intervalInMillesec)
+    this.ohlcvMAsListSource = await klineListGetDuringPeriod(this.exchangeId, this.symbols, numberOfPoints, this.endTime)
   }
 
   fetchBalance () {

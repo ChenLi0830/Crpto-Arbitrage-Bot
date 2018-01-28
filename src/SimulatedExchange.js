@@ -114,6 +114,9 @@ module.exports = class SimulatedExchange {
       /**
        * 模拟过程结束: 统计BTC余额，保存tradingRecord
        */
+      for (let order of this.limitSellOrders) {
+        this.cancelOrder(order.id)
+      }
       let BTCBalance = this.balance['BTC']
       Object.keys(this.balance).forEach(currencyKey => {
         let currencyBalance = this.balance[currencyKey]
@@ -267,11 +270,11 @@ module.exports = class SimulatedExchange {
     return order
   }
 
-  cancelOrder (orderId, symbol) {
+  cancelOrder (orderId) {
     let order = _.find(this.limitSellOrders, {id: orderId})
     order.status = 'canceled'
 
-    let targetCurrency = getTargetCurrencyFromSymbol(symbol)
+    let targetCurrency = getTargetCurrencyFromSymbol(order.symbol)
     this.balance[targetCurrency] = this.balance[targetCurrency] + order.amount
   }
 }

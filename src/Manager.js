@@ -25,9 +25,9 @@ const {
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
 
 module.exports = class Manager {
-  constructor (exchangeId = 'binance', credentials, params) {
-    this.exchangeId = exchangeId
-    this.exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials))
+  constructor (exchange, credentials, params) {
+    this.exchange = exchange
+    this.exchangeId = exchange.id
     this.ohlcvMAsList = [] // 记录所有symbols的k线和MA
     this.workerList = [] // 记录所有active的worker
     this.eventList = [] // 记录买币和卖币events
@@ -56,7 +56,8 @@ module.exports = class Manager {
       dynamicProfitList,
       useLockProfit = false,
       contiKlineObserveWindow = 4 * 60 / 5, // 连续增长k线看多少点
-      logInterval = 5 * 60 * 1000
+      logInterval = 5 * 60 * 1000,
+      isSimulation = false
     } = params
 
     this.numberOfPoints = numberOfPoints
@@ -70,6 +71,7 @@ module.exports = class Manager {
     this.useLockProfit = useLockProfit
     this.contiKlineObserveWindow = contiKlineObserveWindow
     this.logInterval = logInterval
+    this.isSimulation = isSimulation
     // Vol相关
     this.useVolAsCriteria = useVolAsCriteria
     this.longVolSymbolNo = longVolSymbolNo
@@ -132,25 +134,37 @@ module.exports = class Manager {
   }
 
   async fetchData () {
-    let ohlcvList
     /**
-     * 初始fetch，获取所有所需数据
+     * 模拟环境中读取数据
      */
-    if (!this.ohlcvMAsList || !this.ohlcvMAsList.length) {
-      await this.exchange.loadMarkets()
-      let symbols = _.filter(this.exchange.symbols, symbol => symbol.endsWith('BTC'))
-      ohlcvList = await klineListGetDuringPeriod(this.exchangeId, symbols, this.numberOfPoints + this.padding)
+    if (this.isSimulation) {
+      this.exchange.nextStep()
+      this.ohlcvMAsList = calcMovingAverge(this.exchange.ohlcvMAsList, this.windows)
     }
     /**
-     * 后续fetch，仅获取更新的数据
+     * 生产环境中读取数据
      */
     else {
-      ohlcvList = await fetchNewPointAndAttach(this.ohlcvMAsList, this.exchangeId, this.windows)
+      let ohlcvList
+      /**
+       * 初始fetch，获取所有所需数据
+       */
+      if (!this.ohlcvMAsList || !this.ohlcvMAsList.length) {
+        await this.exchange.loadMarkets()
+        let symbols = _.filter(this.exchange.symbols, symbol => symbol.endsWith('BTC'))
+        ohlcvList = await klineListGetDuringPeriod(this.exchangeId, symbols, this.numberOfPoints + this.padding)
+      }
+      /**
+       * 后续fetch，仅获取更新的数据
+       */
+      else {
+        ohlcvList = await fetchNewPointAndAttach(this.ohlcvMAsList, this.exchangeId, this.windows)
+      }
+      /**
+       * 计算MA
+       */
+      this.ohlcvMAsList = calcMovingAverge(ohlcvList, this.windows)
     }
-    /**
-     * 计算MA
-     */
-    this.ohlcvMAsList = calcMovingAverge(ohlcvList, this.windows)
   }
 
   _getWhiteList (whiteList, volumeWhiteListLong, volumeWhiteListShort, blackList) {

@@ -271,30 +271,63 @@ async function testParamsInSimulation () {
     return new Array(end - start).fill().map((d, i) => i + start)
   }
 
+  console.time('LoadData')
   await simulatedExchange.initExchange()
-  for (let window0 of numberRange(3, 8)) {
-    for (let window1 of [9, 16, 25]) {
-      for (let dynamicProfit1 of [0.2, 0.4, 0.8, 1.2, 1.8, 2.5, 3.5, 4.5]) {
-        params.windows = [window0, window1, 99]
-        params.dynamicProfitList = [
-          {
-            multiplier: dynamicProfit1,
-            percent: 90
-          }
-        ]
-        simulatedExchange.resetSimulation()
-        let manager = new Manager(simulatedExchange, credentials[exchangeId], params)
-        let BTCResult = await manager.start()
+  console.timeEnd('LoadData')
 
-        if (BTCResult > bestBalance) {
-          bestBalance = BTCResult
-          bestParams = params
-          console.log(`bestBalance ${bestBalance}`, 'bestParams', bestParams)
-          fs.appendFileSync(`./savedData/klines/bestParams-3.js`, JSON.stringify({bestBalance, bestParams}) + '\n', 'utf-8')
-        }
+  await api.sleep(1000)
+  
+  console.time('Simulation')
+  for (let window0 of [7]) {
+  for (let window1 of [21]) {
+  for (let window2 of [99]) {
+  for (let dynamicProfit1 of [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]) {
+  for (let dynamicProfit2 of [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]) {
+  for (let dynamicProfit3 of [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]) {
+  for (let dynamicPercent1 of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
+  for (let dynamicPercent2 of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
+  for (let dynamicPercent3 of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
+    if (dynamicProfit1 >= dynamicProfit2 || dynamicProfit2 >= dynamicProfit3) {
+      continue
+    }
+    if (dynamicPercent1 + dynamicPercent2 + dynamicPercent3 >= 100) {
+      continue
+    }
+    params.windows = [window0, window1, window2]
+    params.dynamicProfitList = [
+      {
+        multiplier: dynamicProfit1,
+        percent: dynamicPercent1
+      },
+      {
+        multiplier: dynamicProfit2,
+        percent: dynamicPercent2
+      },
+      {
+        multiplier: dynamicProfit3,
+        percent: dynamicPercent3
       }
+    ]
+    simulatedExchange.resetSimulation()
+    let manager = new Manager(simulatedExchange, credentials[exchangeId], params)
+    let BTCResult = await manager.start()
+
+    if (BTCResult > bestBalance) {
+      bestBalance = BTCResult
+      bestParams = params
+      console.log(`bestBalance ${bestBalance}`, 'bestParams', bestParams)
+      fs.appendFileSync(`./savedData/klines/bestParams-3.js`, JSON.stringify({bestBalance, bestParams}) + '\n', 'utf-8')
     }
   }
+  }
+  }
+  }
+  }
+  }
+  }
+  }
+  }
+  console.timeEnd('Simulation')
 }
 
 async function main () {

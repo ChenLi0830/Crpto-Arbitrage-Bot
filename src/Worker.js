@@ -1,6 +1,7 @@
 const log = require('ololog').configure({locate: false})
 require('ansicolor').nice
 const _ = require('lodash')
+const SimulatedExchange = require('./SimulatedExchange')
 const {
   generateCutProfitList,
   retryMutationTaskIfTimeout,
@@ -39,9 +40,11 @@ module.exports = class Worker {
     let weightedPrice = weightedPrices.avgPrice
     log(`--- Start Task: Worker for ${this.symbol} is buying at ${weightedPrice} with BTCAmount ${this.BTCAmount}`.blue)
 
-    player.play('./src/Glass.aiff', (err) => {
-      if (err) throw err
-    })
+    if (!(this.exchange instanceof SimulatedExchange)) {
+      player.play('./src/Glass.aiff', (err) => {
+        if (err) throw err
+      })
+    }
 
     /**
      * 买三次，避免买不到
@@ -145,9 +148,11 @@ module.exports = class Worker {
     log(`--- Start Task: Worker for ${this.symbol} is selling ${targetCurrency}, balance ${targetBalance}, sell amount ${sellAmount}`.green)
 
     if (targetBTCAmount === undefined) { // 全卖时播放声音
-      player.play('./src/Purr.aiff', (err) => {
-        if (err) throw err
-      })
+      if (!(this.exchange instanceof SimulatedExchange)) {
+        player.play('./src/Purr.aiff', (err) => {
+          if (err) throw err
+        })
+      }
     }
 
     let minSellAmount = this.exchange.markets[this.symbol].limits.amount.min

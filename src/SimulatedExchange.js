@@ -105,6 +105,14 @@ module.exports = class SimulatedExchange {
     this.ohlcvMAsList = this._calcOhlcvMAsList()
   }
 
+  resetSimulation () {
+    this.currentTime = undefined
+    this.stepIndex = this.padding + this.numberOfPoints - 1
+    this.limitSellOrders = []
+    this.tradingRecord = []
+    this.ohlcvMAsList = this._calcOhlcvMAsList()
+  }
+
   /**
    * 模拟市场经历了stepSizeInMillesec时间的变化
    */

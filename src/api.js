@@ -76,7 +76,7 @@ const weightedPrice = (priceAmountList, BTCVol = 0.01) => {
       break
     }
   }
-  let avgPrice = totalPrice / amount
+  let avgPrice = totalPrice !== Infinity ? totalPrice / amount : tradePrice
   log(`price ${avgPrice}, accumulatedBTCVol ${accumulatedBTCVol}`.green)
   return {avgPrice, tradePrice, accumulatedBTCVol}
 }

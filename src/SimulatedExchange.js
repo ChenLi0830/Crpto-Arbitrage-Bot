@@ -28,7 +28,8 @@ module.exports = class SimulatedExchange {
     } = params
 
     this.exchangeId = exchangeId
-    this.balance = {BTC: simuBalance}
+    this.originalBTCBalance = simuBalance
+    this.balance = {BTC: this.originalBTCBalance}
     this.tradingFee = simuTradingFee
     this.numberOfPoints = numberOfPoints
     this.padding = padding
@@ -106,6 +107,7 @@ module.exports = class SimulatedExchange {
   }
 
   resetSimulation () {
+    this.balance = {BTC: this.originalBTCBalance}
     this.currentTime = undefined
     this.stepIndex = this.padding + this.numberOfPoints - 1
     this.limitSellOrders = []
@@ -143,12 +145,13 @@ module.exports = class SimulatedExchange {
      * 得到新数据，并更新this.limitSellOrders
      */
     this.ohlcvMAsList = this._calcOhlcvMAsList()
-    this.limitSellOrders.forEach(order => {
+    let openOrders = _.filter(this.limitSellOrders, {status: 'open'})
+    openOrders.forEach(order => {
       let pastOhlcvMAs = _.find(this.ohlcvMAsList, {symbol: order.symbol}).data.slice(-2)[0]
       /**
        * 保证过去的这一根k线是在设置order的那根k线之后
        */
-      if (order.timestamp > pastOhlcvMAs.timeStamp) {
+      if (order.timestamp < pastOhlcvMAs.timeStamp) {
         /**
          * 如果过去的这根k线的high值大于止盈，则order被filled，更新BTC值
          */

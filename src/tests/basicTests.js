@@ -27,6 +27,7 @@ const {
   buyLimitInBTC,
   dynamicProfitList,
   useLockProfit,
+  isSimulation,
   simuBalance,
   simuTradingFee,
   simuDuration,
@@ -54,11 +55,13 @@ let params = {
   volWindow,
   buyLimitInBTC,
   dynamicProfitList,
-  useLockProfit
+  useLockProfit,
+  isSimulation
 }
 
 async function testWorker () {
-  let manager = new Manager(exchangeId, credentials[exchangeId], params)
+  let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials))
+  let manager = new Manager(exchange, credentials[exchangeId], params)
   await manager.fetchData()
   let worker = new Worker('123', 'ETH/BTC', manager.exchange, manager.dynamicProfitList, 0.005, {})
   let ohlcvMAs = _.find(manager.ohlcvMAsList, {symbol: 'ETH/BTC'})
@@ -84,7 +87,8 @@ async function testWorker () {
 }
 
 async function testManager () {
-  let manager = new Manager(exchangeId, credentials[exchangeId], params)
+  let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials))
+  let manager = new Manager(exchange, credentials[exchangeId], params)
 
   /**
    * 测试logMarket
@@ -187,9 +191,7 @@ async function testSimulatedExchange () {
    * 测试基础methods
    */
   await simulatedExchange.initExchange()
-  console.log(simulatedExchange.ohlcvMAsList[0].data.slice(-2))
   simulatedExchange.nextStep()
-  console.log(simulatedExchange.ohlcvMAsList[0].data.slice(-2))
   console.log('simulatedExchange.symbols', simulatedExchange.symbols)
 
   let symbol = 'ETH/BTC'
@@ -198,17 +200,55 @@ async function testSimulatedExchange () {
   console.log('ohlcvMA', ohlcvMAs.data.slice(-2))
 
   await worker.marketBuy(ohlcvMAs)
+  await worker.createCutProfitOrders(ohlcvMAs)
+
+  await worker.cancelCutProfitOrders()
+  await worker.marketSell(ohlcvMAs)
+  console.log('finished')
   // await worker.createCutProfitOrders(ohlcvMAs)
   // await worker.updateRemainingBTCAmount()
   // console.log(worker.remainingBTC)
   // markets
 }
 
+async function testSimulation () {
+  //   /**
+  //  * 从SimulatedExchange外部获取数据源，好处是可以重复使用
+  //  */
+  // let totalNumberOfPoints = Math.trunc(simuDuration / intervalInMillesec)
+  // let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}))
+  // await exchange.loadMarkets()
+  // let symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
+  // let dataSource = await klineListGetDuringPeriod(exchangeId, symbols, totalNumberOfPoints, simuEndTime)
+
+  let SimuParams = {
+    numberOfPoints,
+    padding,
+    intervalInMillesec,
+    // ohlcvMAsListSource: dataSource
+  }
+
+  let simulatedExchange = new SimulatedExchange(
+    exchangeId,
+    simuBalance,
+    simuTradingFee,
+    simuDuration,
+    simuEndTime,
+    simuTimeStepSize,
+    SimuParams
+  )
+  await simulatedExchange.initExchange()
+
+  let manager = new Manager(simulatedExchange, credentials[exchangeId], params)
+  await manager.start()
+}
+
 async function main () {
   try {
     // await testWorker()
     // await testManager()
-    await testSimulatedExchange()
+    // await testSimulatedExchange()
+    await testSimulation()
   }
   catch (error) {
     console.log(error)

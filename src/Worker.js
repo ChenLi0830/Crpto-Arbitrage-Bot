@@ -164,8 +164,7 @@ module.exports = class Worker {
       let sellResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketSellOrder', [this.symbol, sellAmount, {'recvWindow': 60*10*1000}])
       log(`--- Selling Result`.blue, sellResult)
     }
-
-    this.BTCAmount = this.BTCAmount - sellAmount * ohlcvMAs.data.slice(-1)[0].close
+    this.BTCAmount = targetBTCAmount ? this.BTCAmount - sellAmount * ohlcvMAs.data.slice(-1)[0].close : this.BTCAmount
     this.currencyAmount = this.currencyAmount - sellAmount
   }
 

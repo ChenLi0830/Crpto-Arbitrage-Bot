@@ -274,7 +274,7 @@ async function testParamsInSimulation () {
   await simulatedExchange.initExchange()
   for (let window0 of numberRange(3, 8)) {
     for (let window1 of [9, 16, 25]) {
-      for (let dynamicProfit1 of [0.4, 0.6, 0.8, 1, 1.2, 1.5]) {
+      for (let dynamicProfit1 of [0.2, 0.4, 0.8, 1.2, 1.8, 2.5, 3.5, 4.5]) {
         params.windows = [window0, window1, 99]
         params.dynamicProfitList = [
           {
@@ -290,7 +290,7 @@ async function testParamsInSimulation () {
           bestBalance = BTCResult
           bestParams = params
           console.log(`bestBalance ${bestBalance}`, 'bestParams', bestParams)
-          fs.appendFileSync('./savedData/klines/bestParams.js', util.inspect({bestBalance, bestParams}), 'utf-8')
+          fs.appendFileSync(`./savedData/klines/bestParams-3.js`, JSON.stringify({bestBalance, bestParams}) + '\n', 'utf-8')
         }
       }
     }

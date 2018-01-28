@@ -524,7 +524,9 @@ module.exports = class Manager {
         /**
          * 热更新参数
          */
-        this._hotReloadParams()
+        if (!this.isSimulation) {
+          this._hotReloadParams()
+        }
         /**
          * 检查内存
          */

@@ -393,7 +393,7 @@ async function fetchNewPointAndAttach (ohlcvMAsList, exchangeId, windows) {
 function calcMovingAverge (ohlcvList, windows) {
   ohlcvList.forEach(ohlcvs => {
     let closeList = ohlcvs.data.map(ohlcv => ohlcv.close)
-    for (let i = 0; i < closeList.length; i++) {
+    for (let i = closeList.length - 3; i < closeList.length; i++) {
       for (let window of windows) {
         if (i >= window - 1) {
           let MA = _.mean(closeList.slice(i - window + 1, i + 1))

@@ -7,6 +7,8 @@ const _ = require('lodash')
 const api = require('../api')
 const klineListGetDuringPeriod = require('../database/klineListGetDuringPeriod')
 const ccxt = require('ccxt')
+const fs = require('fs')
+const util = require('util')
 
 const {
   numberOfPoints,
@@ -212,19 +214,10 @@ async function testSimulatedExchange () {
 }
 
 async function testSimulation () {
-  //   /**
-  //  * 从SimulatedExchange外部获取数据源，好处是可以重复使用
-  //  */
-  // let totalNumberOfPoints = Math.trunc(simuDuration / intervalInMillesec)
-  // let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}))
-  // await exchange.loadMarkets()
-  // let symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
-  // let dataSource = await klineListGetDuringPeriod(exchangeId, symbols, totalNumberOfPoints, simuEndTime)
-
   let SimuParams = {
     numberOfPoints,
     padding,
-    intervalInMillesec,
+    intervalInMillesec
     // ohlcvMAsListSource: dataSource
   }
 
@@ -244,14 +237,74 @@ async function testSimulation () {
   console.log('BTCResult', BTCResult)
 }
 
+async function testParamsInSimulation () {
+  /**
+   * 从SimulatedExchange外部获取数据源，好处是可以重复使用
+   */
+  let totalNumberOfPoints = Math.trunc(simuDuration / intervalInMillesec)
+  let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}))
+  await exchange.loadMarkets()
+  let symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
+  let dataSource = await klineListGetDuringPeriod(exchangeId, symbols, totalNumberOfPoints, simuEndTime)
+
+  let SimuParams = {
+    numberOfPoints,
+    padding,
+    intervalInMillesec,
+    ohlcvMAsListSource: dataSource
+  }
+
+  let simulatedExchange = new SimulatedExchange(
+    exchangeId,
+    simuBalance,
+    simuTradingFee,
+    simuDuration,
+    simuEndTime,
+    simuTimeStepSize,
+    SimuParams
+  )
+
+  let bestBalance = 0
+  let bestParams = {}
+
+  function numberRange (start, end) {
+    return new Array(end - start).fill().map((d, i) => i + start)
+  }
+
+  await simulatedExchange.initExchange()
+  for (let window0 of numberRange(3, 8)) {
+    for (let window1 of [9, 16, 25]) {
+      for (let dynamicProfit1 of [0.4, 0.6, 0.8, 1, 1.2, 1.5]) {
+        params.windows = [window0, window1, 99]
+        params.dynamicProfitList = [
+          {
+            multiplier: dynamicProfit1,
+            percent: 90
+          }
+        ]
+        simulatedExchange.resetSimulation()
+        let manager = new Manager(simulatedExchange, credentials[exchangeId], params)
+        let BTCResult = await manager.start()
+
+        if (BTCResult > bestBalance) {
+          bestBalance = BTCResult
+          bestParams = params
+          console.log(`bestBalance ${bestBalance}`, 'bestParams', bestParams)
+          fs.appendFileSync('./savedData/klines/bestParams.js', util.inspect({bestBalance, bestParams}), 'utf-8')
+        }
+      }
+    }
+  }
+}
+
 async function main () {
   try {
     // await testWorker()
     // await testManager()
     // await testSimulatedExchange()
-    await testSimulation()
-  }
-  catch (error) {
+    // await testSimulation()
+    await testParamsInSimulation()
+  } catch (error) {
     console.log(error)
   }
 }

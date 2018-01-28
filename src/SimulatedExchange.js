@@ -4,7 +4,11 @@ const _ = require('lodash')
 const ccxt = require('ccxt')
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
 const uuidv4 = require('uuid/v4')
-const {getTargetCurrencyFromSymbol} = require('./utils')
+const moment = require('moment')
+const {
+  getTargetCurrencyFromSymbol,
+  saveJsonToCSV
+} = require('./utils')
 
 module.exports = class SimulatedExchange {
   constructor (
@@ -40,6 +44,7 @@ module.exports = class SimulatedExchange {
     this.ohlcvMAsListSource = ohlcvMAsListSource // 整个时间段内，需要的数据
     this.ohlcvMAsList = []
     this.limitSellOrders = []
+    this.tradingRecord = []
   }
 
   /**
@@ -109,8 +114,23 @@ module.exports = class SimulatedExchange {
      * 检查模拟过程是否结束
      */
     if (this.currentTime > this.endTime) {
-      // 总结模拟过程，并保存到文件，完事
-      process.exit()
+      /**
+       * 统计余额
+       */
+      let BTCBalance = this.balance['BTC']
+      Object.keys(this.balance).forEach(currencyKey => {
+        let currencyBalance = this.balance[currencyKey]
+        if (currencyKey !== 'BTC' && currencyBalance > 0) {
+          let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol: `${currencyKey}/BTC`})
+          let currencyPrice = ohlcvMAs.data.slice(-1)[0].close
+          BTCBalance += currencyPrice * currencyBalance
+        }
+      })
+      /**
+       * 保存文件
+       */
+      saveJsonToCSV(this.tradingRecord, ['event', 'amount', 'price', 'type', 'time'], `./savedData/klines/simulationTradingRecords.csv`)
+      return BTCBalance
     }
     /**
      * 得到新数据，并更新this.limitSellOrders
@@ -130,6 +150,14 @@ module.exports = class SimulatedExchange {
           order.filled = order.amount
           let earnedBTCAmount = order.amount * order.price
           this.balance['BTC'] += earnedBTCAmount
+
+          this.tradingRecord.push({
+            event: `Sell ${order.symbol}`,
+            amount: order.amount,
+            price: order.price,
+            type: 'limitOrder',
+            time: moment(order.timestamp).format('MMMM Do YYYY, h:mm:ss a')
+          })
         }
       }
     })
@@ -143,21 +171,29 @@ module.exports = class SimulatedExchange {
 
   fetchL2OrderBook (symbol) {
     let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
-    let price = ohlcvMAs.data.slice(-1)[0].close
+    let price = ohlcvMAs.data.slice(-1)[0].close * (1 + this.tradingFee)
     return {
       asks: [[price, Infinity]],
       bids: [[price, Infinity]]
     }
   }
 
-  createMarketBuyOrder (symbol, buyInAmount) {
+  createMarketBuyOrder (symbol, amount) {
     let targetCurrency = getTargetCurrencyFromSymbol(symbol)
     let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
-    let price = ohlcvMAs.data.slice(-1)[0].close
+    let price = ohlcvMAs.data.slice(-1)[0].close * (1 + this.tradingFee)
     let timeStamp = this.ohlcvMAsList[0].data.slice(-1)[0].timeStamp
 
-    this.balance[targetCurrency] = this.balance[targetCurrency] === undefined ? buyInAmount : this.balance[targetCurrency] + buyInAmount
-    this.balance['BTC'] = this.balance['BTC'] - buyInAmount * price
+    this.balance[targetCurrency] = this.balance[targetCurrency] === undefined ? amount : this.balance[targetCurrency] + amount
+    this.balance['BTC'] = this.balance['BTC'] - amount * price
+
+    this.tradingRecord.push({
+      event: `Buy ${symbol}`,
+      amount: amount,
+      price: price,
+      type: 'marketOrder',
+      time: moment(timeStamp).format('MMMM Do YYYY, h:mm:ss a')
+    })
 
     return {
       id: uuidv4(),
@@ -167,9 +203,9 @@ module.exports = class SimulatedExchange {
       type: 'market',
       side: 'buy',
       price: 0,
-      amount: buyInAmount,
+      amount: amount,
       cost: 0,
-      filled: buyInAmount,
+      filled: amount,
       remaining: 0,
       status: 'closed',
       fee: undefined
@@ -181,15 +217,23 @@ module.exports = class SimulatedExchange {
     return orders
   }
 
-  createMarketSellOrder (symbol, sellAmount) {
+  createMarketSellOrder (symbol, amount) {
     let targetCurrency = getTargetCurrencyFromSymbol(symbol)
     let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
     // 以最后一根的open价来卖
-    let price = ohlcvMAs.data.slice(-1)[0].open
+    let price = ohlcvMAs.data.slice(-1)[0].open * (1 - this.tradingFee)
     let timeStamp = this.ohlcvMAsList[0].data.slice(-1)[0].timeStamp
 
-    this.balance['BTC'] = this.balance['BTC'] + sellAmount * price
-    this.balance[targetCurrency] = this.balance[targetCurrency] - sellAmount
+    this.balance['BTC'] = this.balance['BTC'] + amount * price
+    this.balance[targetCurrency] = this.balance[targetCurrency] - amount
+
+    this.tradingRecord.push({
+      event: `Sell ${symbol}`,
+      amount,
+      price,
+      type: 'marketOrder',
+      time: moment(timeStamp).format('MMMM Do YYYY, h:mm:ss a')
+    })
 
     return {
       id: uuidv4(),
@@ -199,9 +243,9 @@ module.exports = class SimulatedExchange {
       type: 'market',
       side: 'sell',
       price: 0,
-      amount: sellAmount,
+      amount: amount,
       cost: 0,
-      filled: sellAmount,
+      filled: amount,
       remaining: 0,
       status: 'closed',
       fee: undefined

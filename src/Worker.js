@@ -50,11 +50,11 @@ module.exports = class Worker {
     buyInAmount = buyInAmount > 1 ? Math.trunc(buyInAmount) : buyInAmount
     let buyResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketBuyOrder', [this.symbol, buyInAmount, {'recvWindow': 60 * 10 * 1000}])
     console.log('buyResult', buyResult)
-    if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
+    if (!buyResult || buyResult.status !== 'closed') {
       throw new Error('Purchase error!')
     }
 
-    let boughtAmount = Number(buyResult.info.executedQty)
+    let boughtAmount = Number(buyResult.amount)
 
     try {
       let buyInAmount = maxAmount * 0.21
@@ -62,22 +62,22 @@ module.exports = class Worker {
       let buyResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketBuyOrder', [this.symbol, buyInAmount, {'recvWindow': 60*10*1000}])
       //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
       log(`Second buy result`, buyResult)
-      if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
+      if (!buyResult || buyResult.status !== 'closed') {
         throw new Error('Second purchase error!')
       }
 
-      boughtAmount += Number(buyResult.info.executedQty)
+      boughtAmount += Number(buyResult.amount)
 
       buyInAmount = maxAmount * 0.07
       buyInAmount = buyInAmount > 1 ? Math.trunc(buyInAmount) : buyInAmount
       buyResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketBuyOrder', [this.symbol, buyInAmount, {'recvWindow': 60*10*1000}])
       //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
       log(`Third buy result`, buyResult)
-      if (!buyResult || !buyResult.info || buyResult.info.status !== 'FILLED') {
+      if (!buyResult || buyResult.status !== 'closed') {
         throw new Error('Third purchase error!')
       }
 
-      boughtAmount += Number(buyResult.info.executedQty)
+      boughtAmount += Number(buyResult.amount)
     }
     catch (error) {
       log(`Second or third buy error, relatively ok ${error}`.red)
@@ -224,6 +224,7 @@ module.exports = class Worker {
     let cancelOrderPromises = orderIds.map(orderId => retryMutationTaskIfTimeout(this.exchange, 'cancelOrder', [orderId, this.symbol, {'recvWindow': 60*10*1000}]))
 
     let results = await Promise.all(cancelOrderPromises)
+    console.log('results', results)
 
     this.limitOrders = []
     this.orderFilledAmount = 0

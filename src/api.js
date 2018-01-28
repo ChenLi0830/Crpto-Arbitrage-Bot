@@ -61,7 +61,7 @@ const largePriceDiff = (a, b, percentage) => {
   }
 }
 
-const weightedPrice = (priceAmountList, BTCVol=0.01) => {
+const weightedPrice = (priceAmountList, BTCVol = 0.01) => {
   let amount = 0
   let totalPrice = 0
   let accumulatedBTCVol = 0
@@ -76,9 +76,9 @@ const weightedPrice = (priceAmountList, BTCVol=0.01) => {
       break
     }
   }
-  let price = totalPrice / amount
-  log(`price ${price}, accumulatedBTCVol ${accumulatedBTCVol}`.green)
-  return {price, tradePrice, accumulatedBTCVol}
+  let avgPrice = totalPrice !== Infinity ? totalPrice / amount : tradePrice
+  log(`price ${avgPrice}, accumulatedBTCVol ${accumulatedBTCVol}`.green)
+  return {avgPrice, tradePrice, accumulatedBTCVol}
 }
 
 async function getPotentialTrades (tickersSortedByPrice, PRICE_DIFF, BTCVol=0.1) {

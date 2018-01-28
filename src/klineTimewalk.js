@@ -22,6 +22,8 @@ const {
   addVibrateValue,
   addBTCVolValue,
   generateCutProfitList,
+  addPaddingExtractedInfoList,
+  fetchNewPointAndAttach,
 } = utils
 
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
@@ -33,6 +35,7 @@ let {
   PLOT_CSV_FILE,
   intervalInMillesec,
   whiteList,
+  blackList,
   dynamicProfitList,
 } = require('./config')
 
@@ -40,7 +43,7 @@ let {
  * 测试用，lineLength是用来获得24小时vol时用的
  * */
 lineLength = 1 * 24 * 60 / 5//
-KLINE_FILE = `./savedData/klines/klines-simulate-7-4.js`
+KLINE_FILE = `./savedData/klines/klines-5m-1d-Jan-21.js`
 
 console.log('KLINE_FILE', KLINE_FILE)
 console.log('PLOT_CSV_FILE', PLOT_CSV_FILE)
@@ -59,7 +62,10 @@ let useVolumeToChooseCurrency = true
 let tempBuy = '' // used for debugging, 比如设置成 ETH/BTC，production就会马上买入BTC
 
 let cutProfitList = []
-
+let numberOfPoints = 24 * 60 / 5
+let marketIsGood = false
+let lastBoughtSymbol = null
+let prevBuyingPoolList = []
 //-----------------------------------------------------------------------------
 
 function checkValueCriteria(klines, closeLine, openLine) {
@@ -75,13 +81,13 @@ function checkValueCriteria(klines, closeLine, openLine) {
 
 function checkVolCriteria(volumeLine){
   let isVolumeIncreaseFast = (volumeLine[klineIndex] / volumeLine[klineIndex-1]) > 1
-  let volumeAvg = _.mean(volumeLine.slice(-20))
+  let volumeAvg = _.mean(volumeLine.slice(-48))
   let isVolumeHigherThanAvg = volumeLine[klineIndex] > volumeAvg
   return isVolumeIncreaseFast && isVolumeHigherThanAvg
 }
 
-function checkBuyingCriteria(extractedInfo) {
-  const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
+function checkBuyingCriteria(ohlcvMA) {
+  const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = ohlcvMA
   let matchVolCriteria = checkVolCriteria(volumeLine)
   let isPricesHigherThanPrevPoint = (closeLine[klineIndex] > closeLine[klineIndex-1]) && (openLine[klineIndex] > openLine[klineIndex-1])
   let nowValueMatchCriteria = checkValueCriteria(klines, closeLine, openLine)
@@ -104,51 +110,86 @@ function rateCurrency(klines, volumeLine) {
   return rate
 }
 
-function rateAndSort(extractedInfoList, whiteList) {
+function getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList) {
+  let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
+  /*
+  * 删除黑名单中的部分
+  * */
+  blackList && blackList.forEach(symbol => whiteListSet.delete(symbol))
+  return [...whiteListSet]
+}
+
+function rateAndSort(ohlcvMAList, whiteList) {
   let buyingPool = []
 
-  for (let extractedInfo of extractedInfoList) {
+  for (let ohlcvMA of ohlcvMAList) {
+
+    /**
+     * 上个刚刚买入的symbol如果和这个一样，则跳过，不连续买入同一个symbol
+     * */
+    //    if (lastBoughtSymbol === ohlcvMA.symbol) {
+    //      continue
+    //    }
+
     /**
      * 白名单过滤
      * */
-    let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
-    whiteList = [...whiteListSet]
-//    whiteList = [...whiteListSet].slice(0, topVolumeNo)
+    let newWhiteList = getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList)
 
-    if (whiteList && whiteList.length > 0) {
-      if (!whiteList.includes(extractedInfo.symbol)) {
+    if (newWhiteList && newWhiteList.length > 0) {
+      if (!newWhiteList.includes(ohlcvMA.symbol)) {
         continue
       }
     }
     /**
      * 若无白名单，则选择振动最强的
      * */
-    else if (vibrateWhiteList && vibrateWhiteList.length > 0 && !vibrateWhiteList.includes(extractedInfo.symbol)) {
+    else if (vibrateWhiteList && vibrateWhiteList.length > 0 && !vibrateWhiteList.includes(ohlcvMA.symbol)) {
       continue
     }
-    else if (weightWhiteList && weightWhiteList.length > 0 && !weightWhiteList.includes(extractedInfo.symbol)) {
+    else if (weightWhiteList && weightWhiteList.length > 0 && !weightWhiteList.includes(ohlcvMA.symbol)) {
       continue
     }
 
-    const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = extractedInfo
-    let matchBuyingCriteria = checkBuyingCriteria(extractedInfo)
-    let isNewKline = ((new Date().getTime() - extractedInfo.timeLine.slice(-1)[0]) < 45 * 1000) //todo 改成30
-    if (matchBuyingCriteria || extractedInfo.symbol===tempBuy) {
+    /**
+     * 过滤已经进行到一半的行情
+     * */
+    let isHalfGoingDeal = false
+    for (let {time, pool} of prevBuyingPoolList) {
+      // 如果在5分钟以外出现过，则判断为是进行到一般的行情
+      let now = ohlcvMA.timeLine.slice(-1)[0]
+      if ((now - time) > 5 * 60 * 1000 && (now - time) < 20 * 60 * 1000 && pool.indexOf(ohlcvMA.symbol) > -1) {
+        isHalfGoingDeal=true
+        break
+      }
+    }
+    if (isHalfGoingDeal) {
+      continue
+    }
+
+    const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = ohlcvMA
+    let matchBuyingCriteria = checkBuyingCriteria(ohlcvMA)
+    let isNewKline = process.env.PRODUCTION ? ((new Date().getTime() - ohlcvMA.timeLine.slice(-1)[0]) < 45 * 1000) : false
+    if (matchBuyingCriteria || ohlcvMA.symbol===tempBuy) {
       tempBuy = ''
       let rate = rateCurrency(klines, volumeLine)
-      buyingPool.push({...extractedInfo, rate})
+      buyingPool.push({...ohlcvMA, rate})
     }
     /*
     * 如果是刚刚生成的k线，判断它之前的k线是否满足条件，如果是则买入
     * */
     else if (isNewKline) {
-      let prevExtractedInfo = cutExtractedInfoList([extractedInfo], 0, extractedInfo.timeLine.length-1)[0]
+      let prevExtractedInfo = cutExtractedInfoList([ohlcvMA], 0, ohlcvMA.timeLine.length-1)[0]
+      /**
+       * Add padding 保证prevExtractedInfo和ohlcvMA一样长
+       * */
+      prevExtractedInfo = addPaddingExtractedInfoList([prevExtractedInfo], 1)[0]
       let prevPointMatchBuyingCriteria = checkBuyingCriteria(prevExtractedInfo)
 
       if (prevPointMatchBuyingCriteria) {
         const {klines, volumeLine, closeLine, openLine, highLine, lowLine} = prevExtractedInfo
         let rate = rateCurrency(klines, volumeLine)
-        buyingPool.push({...extractedInfo, rate})
+        buyingPool.push({...ohlcvMA, rate})
       }
     }
   }
@@ -157,18 +198,24 @@ function rateAndSort(extractedInfoList, whiteList) {
   return sortedPool
 }
 
-function printLine(lineData){
-  const chart = asciichart.plot(lineData, {height: 15})
-  log.yellow('\n' + chart, '\n')
-}
-
 function pickTradeFromList(newExtractedInfoList, whiteList){
   let sortedPool = rateAndSort(newExtractedInfoList, whiteList)
   if (sortedPool.length > 0) {
-    //    console.log('sortedPoolsymbol', sortedPool.map(currency => `${currency.symbol}: ${currency.rate}`).join('\n'))
+    let now = sortedPool[0].timeLine.slice(-1)[0]
+    prevBuyingPoolList.push({
+      time: now,
+      pool: sortedPool.map(o => o.symbol)
+    })
+    /**
+     * 如果超过10分钟的，就去掉
+     * */
+    if (now - prevBuyingPoolList[0].time > 15 * 60 * 1000) {
+      console.log('prevBuyingPoolList.unshift()')
+      prevBuyingPoolList.shift()
+    }
+
     log('Picking from list: '.green, sortedPool.map(o => o.symbol).join(' '))
     let pickedTrade
-    //    if (sortedPool[0].rate > 20){
     pickedTrade  = sortedPool[0]
     return pickedTrade
   }
@@ -215,6 +262,33 @@ function calcProfitPercent(lastPickedTrade, lastTradeCurrentState){
 
 async function useKlineStrategy(params){
   let {newExtractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList=[]} = params
+
+  /**
+   * 用volume来获得volumeWhiteList
+   * */
+  if (useVolumeToChooseCurrency) {
+    let topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints)
+    volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
+    //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
+
+    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 6)
+    volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+//    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 6, 5000 / 6)
+//    volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
+
+    let overallWhiteList = getWhiteList(whiteList, volumeWhiteList24H, volumeWhiteList4H, blackList)
+    log(`WhiteList: ${overallWhiteList}`.yellow)
+
+    /*
+    * 显示1小时内，除了已经在whiteList里，vol最高的前10
+    * */
+    topVolume = getTopVolume(newExtractedInfoList, undefined, numberOfPoints / 24 / 4)
+    topVolume = _.filter(topVolume, o => overallWhiteList.indexOf(o.symbol) === -1).slice(0,10)
+    log(`Top volume 15m: `.yellow + topVolume.map(o => (
+      `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green
+    )).join(' '))
+  }
+
   let pickedTrade = pickTradeFromList(newExtractedInfoList, whiteList)
 
   if (pickedTrade) {
@@ -255,7 +329,7 @@ async function useKlineStrategy(params){
       }
     }
   }
-
+  shouldLockProfit = false // 停掉止盈保本
 
   let dropThroughKline = false
   let fastMADropThroughMiddleMA = false
@@ -269,7 +343,7 @@ async function useKlineStrategy(params){
      * */
     let sellKline = process.env.PRODUCTION ? klineIndex-1 : klineIndex
     dropThroughKline = lastTradeCurrentState.closeLine[sellKline] < lastTradeCurrentState.klines[windows[0]][sellKline]
-    fastMADropThroughMiddleMA = lastTradeCurrentState.klines[windows[0]][sellKline] < lastTradeCurrentState.klines[windows[1]][sellKline]
+    fastMADropThroughMiddleMA = (lastTradeCurrentState.klines[windows[0]][sellKline] < lastTradeCurrentState.klines[windows[1]][sellKline] && lastTradeCurrentState.klines[windows[0]][sellKline-1] > lastTradeCurrentState.klines[windows[1]][sellKline-1])
     volumeLessThanPrevPoint = (lastTradeCurrentState.volumeLine[sellKline] / lastTradeCurrentState.volumeLine[sellKline - 1]) < 0.5
   }
 
@@ -386,6 +460,7 @@ async function useKlineStrategy(params){
           newPlotDot.sellPrice = askPrice[0]
         }
 
+        lastBoughtSymbol = lastPickedTrade.symbol
         lastPickedTrade = null
       }
       else {
@@ -527,7 +602,7 @@ async function useKlineStrategy(params){
 
       potentialProfit !== 0 && log(`money ${money} -> ${money * (1 + potentialProfit)}`.yellow)
 
-      money = money * (1 + potentialProfit) * 0.9995 // 0.001 手续费
+      money = money * (1 + potentialProfit) * 0.999 // 0.0005 * 2 的手续费
       newPlotDot.value = money
 
       //    // buy in this symbol
@@ -544,10 +619,12 @@ async function useKlineStrategy(params){
         log(`Sell ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Sell ${lastPickedTrade.symbol}`
         newPlotDot.sellPrice = lastTradeCurrentState.closeLine[klineIndex]
+
+        lastBoughtSymbol = lastPickedTrade.symbol
         lastPickedTrade = null
       } else {
         lastPickedTrade = pickedTrade
-        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5)
+        cutProfitList = generateCutProfitList(lastPickedTrade, 60 / 5, dynamicProfitList)
         log(`Buy in ${lastPickedTrade.symbol}`.blue)
         newPlotDot.event = `Buy in ${pickedTrade.symbol}`
       }
@@ -588,7 +665,7 @@ function useVolumeStrategy(params) {
   return {lastPickedTradeList, money, newPlotDot}
 }
 
-async function timeWalk(extractedInfoList){
+async function timeWalk(ohlcvMAList){
   let shift = 0
 //  let shift = 8901 - 2016 - 1
   let money = 100
@@ -596,52 +673,12 @@ async function timeWalk(extractedInfoList){
   let lastPickedTradeList = [] // for volume strategy
   let plot = []//{time, value, event, profit, rate, BTCvolume}
 
-  while (shift + lineLength < extractedInfoList[0].volumeLine.length) {
-    let newExtractedInfoList = cutExtractedInfoList (extractedInfoList, shift, lineLength)
+  while (shift + lineLength < ohlcvMAList[0].volumeLine.length) {
+    let newExtractedInfoList = cutExtractedInfoList (ohlcvMAList, shift, lineLength)
 //    fs.writeFileSync(`${KLINE_FILE}-${shift}.js`, 'module.exports = ' + JSON.stringify(newExtractedInfoList), 'utf-8')
     let timeEpoch = newExtractedInfoList[0].timeLine[klineIndex]
     let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
     log(`${currentTime} ->`.green)
-
-    /**
-     * 给 newExtractedInfoList 添加 vibrateValue 和 BTCVolume
-     * */
-//    extractedInfoList = addVibrateValue(extractedInfoList, observeWindow)
-//    extractedInfoList = addBTCVolValue(extractedInfoList, observeWindow)
-
-    /**
-     * 用momentum获得对应的whiteList -> weightWhiteList,
-     * */
-//    if ((shift % 288) === 0) {
-//      let startDate = new Date()
-//      let topWeighted = getTopWeighted(newExtractedInfoList, topWeightNo, 3 * 24 * 60 / 5)
-//      weightWhiteList = (topWeighted).map(o => `${o.symbol}`)
-//      console.log('weightWhiteList', weightWhiteList)
-//      log(topWeighted.map(o => `${o.symbol}: ${o.weightValue}`).join(' '))
-//    }
-
-    /**
-     * 用Vibrate获得对应的whiteList -> vibrateWhiteList,
-     * */
-    //    let topVibrated = getTopVibrated(extractedInfoList, topVibratedNo, observeWindow)
-    //    vibrateWhiteList = (topVibrated).map(o => `${o.symbol}`)
-    //    log(topVibrated.map(o => `${o.symbol}: ${o.meanSquareError}`).join(' '))
-
-    /**
-     * 用Volume获得对应的whiteList -> volumeWhiteList,
-     * */
-    if (useVolumeToChooseCurrency) {
-      let topVolume = getTopVolume(newExtractedInfoList, undefined, 24 * 60 / 5, 5000)
-      volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-      log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-      topVolume = getTopVolume(newExtractedInfoList, undefined, 1 * 60 / 5, 5000 / 24)
-      volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-      log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-      let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H.slice(0, topVolumeNo), ...volumeWhiteList4H.slice(0, 2)])
-      console.log('whiteListSet', whiteListSet)
-    }
 
     /** useKlineStrategy */
     let klineResult = await useKlineStrategy({newExtractedInfoList, lastPickedTrade, money, currentTime, whiteList})
@@ -649,11 +686,6 @@ async function timeWalk(extractedInfoList){
     money = klineResult.money
     let newPlotDot = klineResult.newPlotDot
 
-    //    /** volumeStrategy */
-    //    let volumeResult = useVolumeStrategy({newExtractedInfoList, lastPickedTradeList, money, currentTime})
-    //    lastPickedTradeList = volumeResult.lastPickedTradeList
-    //    money = volumeResult.money
-    //    let newPlotDot = volumeResult.newPlotDot
     if (!!newPlotDot) {
       plot.push(newPlotDot)
     }
@@ -691,25 +723,32 @@ async function timeWalk(extractedInfoList){
     log(`---        BTC Balance - ${money}`.green)
     log(`---------- Fetching Balance ---------- \n`.green)
 
+//    /**
+//     * 初始化读取 numberOfPoints+padding 个数据
+//     * */
+    let padding = 100
+    let nowStamp = new Date().getTime()
+    let ohlcvMAList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
+    log(`Initialized fetch of ohlcvMAList takes ${((new Date().getTime() - nowStamp)/1000)}s`)
+
     while (true) {
       try {
         /**
          * Read data and get currentTime
          * */
-        let numberOfPoints = 24 * 60 / 5
-        let padding = 100
-        let extractedInfoList = await klineListGetDuringPeriod(exchangeId, symbols, numberOfPoints + padding)
-        /**
-         * 有时extractedInfoList会多fetch一个点，当多fetch一个点时，从左边去掉一个点
-         * */
-        if (extractedInfoList[0].timeLine.length > numberOfPoints) {
-          let start = extractedInfoList[0].timeLine.length - numberOfPoints
-          extractedInfoList = cutExtractedInfoList(extractedInfoList, start, numberOfPoints)
-        }
+        let fetchStamp = new Date().getTime()
+        ohlcvMAList = await fetchNewPointAndAttach(ohlcvMAList, exchangeId, windows)
+//        console.log('ohlcvMAList[0].symbol', ohlcvMAList[0].symbol)
+//        console.log('ohlcvMAList[0].closeLine.length', ohlcvMAList[0].closeLine.length)
+//        console.log('ohlcvMAList[0].closeLine.slice(-3)', ohlcvMAList[0].closeLine.slice(-3))
+//        console.log('ohlcvMAList[0].timeLine.slice(-3)', ohlcvMAList[0].timeLine.slice(-3))
+//        console.log('ohlcvMAList[0].klines[windows[0]].slice(-3)', ohlcvMAList[0].klines[windows[0]].slice(-3))
+//        console.log('ohlcvMAList[0].klines[windows[1]].slice(-3)', ohlcvMAList[0].klines[windows[1]].slice(-3))
+//        log(`It takes ${((new Date().getTime() - fetchStamp)/1000)}s to finish fetching new data`)
 
-        klineIndex = extractedInfoList[0].timeLine.length - 1
-        if (klineIndex !== numberOfPoints - 1) {
-          throw new Error(`klineIndex!==${numberOfPoints - 1}`)
+        klineIndex = ohlcvMAList[0].timeLine.length - 1
+        if (klineIndex !== numberOfPoints) {
+          throw new Error(`klineIndex ${klineIndex} !==${numberOfPoints}`)
         }
 
         /**
@@ -724,6 +763,7 @@ async function timeWalk(extractedInfoList){
 
           await api.sleep(100)
           whiteList = require('./config').whiteList
+          blackList = require('./config').blackList
           dynamicProfitList = require('./config').dynamicProfitList
         }
         catch (error) {
@@ -742,45 +782,23 @@ async function timeWalk(extractedInfoList){
 //        console.log("Program is using " + heapUsed + " bytes of Heap.")
 
         /**
-         * Skip if extractedInfoList hasn't changed
+         * Skip if ohlcvMAList hasn't changed
          * */
-        if (JSON.stringify(prevExtractedInfoList) === JSON.stringify(extractedInfoList)) {
-          //        if (checkInfoChanged(prevExtractedInfoList, extractedInfoList)) {
-          log('No new data, Skip'.green)
+        if (JSON.stringify(prevExtractedInfoList) === JSON.stringify(ohlcvMAList)) {
+          //        if (checkInfoChanged(prevExtractedInfoList, ohlcvMAList)) {
+//          log('No new data, Skip'.green)
           continue
         }
         else {
-          prevExtractedInfoList = extractedInfoList
+          prevExtractedInfoList = ohlcvMAList
         }
 
-        let timeEpoch = Number(extractedInfoList[0].timeLine[klineIndex])
+        let timeEpoch = Number(ohlcvMAList[0].timeLine[klineIndex])
         let currentTime = moment(timeEpoch).format('MMMM Do YYYY, h:mm:ss a')
         log(`${moment().format('MMMM Do YYYY, h:mm:ss a')}, Data time: ${currentTime} ->`.green)
 
-        if (useVolumeToChooseCurrency) {
-          let topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints, 5000)
-          volumeWhiteList24H = (topVolume).map(o => `${o.symbol}`)
-          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints / 6, 5000 / 6)
-          volumeWhiteList4H = (topVolume).map(o => `${o.symbol}`)
-          //        log(topVolume.map(o => `${o.symbol}: ${o.BTCVolume}`).join(' '))
-
-          let whiteListSet = new Set([...whiteList, ...volumeWhiteList24H, ...volumeWhiteList4H])
-          log(`WhiteList: ${([...whiteListSet].slice(0, topVolumeNo)).join(' ')}`.yellow)
-
-          /*
-          * 显示1小时内，除了已经在whiteList里，vol最高的前10
-          * */
-          topVolume = getTopVolume(extractedInfoList, undefined, numberOfPoints / 24)
-          topVolume = _.filter(topVolume, o => !whiteListSet.has(o.symbol)).slice(0,10)
-          log(`Top volume 1H: `.yellow + topVolume.map(o => (
-            `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green
-            )).join(' '))
-        }
-
         log(`---------- Using Kline Strategy ---------- `.green)
-        let klineResult = await useKlineStrategy({newExtractedInfoList: extractedInfoList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList})
+        let klineResult = await useKlineStrategy({newExtractedInfoList: ohlcvMAList, lastPickedTrade, money, currentTime, PRODUCTION, exchange, whiteList})
 
         lastPickedTrade = klineResult.lastPickedTrade
         let newPlotDot = klineResult.newPlotDot
@@ -808,9 +826,11 @@ async function timeWalk(extractedInfoList){
     /**
      * TimeWalk simulation
      * */
-    const extractedInfoList = require(`.${KLINE_FILE}`)
+    const ohlcvMAList = require(`.${KLINE_FILE}`)
+    whiteList = require('./config').whiteList
+    dynamicProfitList = require('./config').dynamicProfitList
     try {
-      await timeWalk(extractedInfoList)
+      await timeWalk(ohlcvMAList)
     } catch (error) {
       console.error(error)
       log(error.message.red)

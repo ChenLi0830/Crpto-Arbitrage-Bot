@@ -5,7 +5,9 @@ const json2csv = require('json2csv')
 const fs = require('fs')
 const promiseRetry = require('promise-retry')
 const _ = require('lodash')
+const {windows} = require('../config')
 const {timeWalkCalcProfit} = require('../pickCoinMomentum')
+const klineListGetDuringPeriod = require('../database/klineListGetDuringPeriod')
 
 function resetConsole () {
   const readline = require('readline')
@@ -38,13 +40,10 @@ const saveJsonToCSV = (json, fields = ['field1', 'field2'], fileName) => {
     //    console.log(csv);
     if (fileName.indexOf('savedData') > -1) {
       fs.writeFileSync(fileName, csv)
-    }
-    else {
+    } else {
       fs.writeFileSync(`./savedData/${fileName}.csv`, csv)
     }
-
-  }
-  catch (err) {
+  } catch (err) {
     // Errors are thrown for bad options, or if the data is empty and no fields are provided.
     // Be sure to provide fields if it is possible that your data array will be empty.
     console.error(err)
@@ -58,12 +57,11 @@ async function simulate (result, delay) {
 /**
  * 用来调用exchange的写入类方法, 比如买币，卖币等等，当timeout时，自动retry
  * */
-async function retryMutationTaskIfTimeout (exchange, func, args=[]) {
+async function retryMutationTaskIfTimeout (exchange, func, args = []) {
   return await promiseRetry(async (retry, number) => {
     try {
       return await exchange[func](...args)
-    }
-    catch (err) {
+    } catch (err) {
       if (err instanceof ccxt.RequestTimeout) {
         log.bright.yellow(`[Request Timeout], retry task - ${number} time`)
         retry(err)
@@ -76,12 +74,11 @@ async function retryMutationTaskIfTimeout (exchange, func, args=[]) {
 /**
  * 用来调用exchange的读取类方法, 比如获取余额等等，当有任何错误时，自动retry
  * */
-async function retryQueryTaskIfAnyError (exchange, func, args=[]) {
+async function retryQueryTaskIfAnyError (exchange, func, args = []) {
   return await promiseRetry(async (retry, number) => {
     try {
       return await exchange[func](...args)
-    }
-    catch (err) {
+    } catch (err) {
       console.log(err)
       log.bright.yellow(`retry task - ${number} time`)
       retry(err)
@@ -90,51 +87,90 @@ async function retryQueryTaskIfAnyError (exchange, func, args=[]) {
 }
 
 /**
- * 从ExtractedInfoList里截取出对应长度的
+ * 为ExtractedInfoList 从开始处添加padding
  * */
-function cutExtractedInfoList (extractedInfoList, start, lineLength) {
-  let newExtractedInfoList = extractedInfoList.map(extractedInfo => {
+function addPaddingExtractedInfoList (ohlcvMAsList, paddingLength = 1) {
+  let paddingList = []
+  for (let i = 0; i < paddingLength; i++) {
+    paddingList.push(0)
+  }
+
+  let newExtractedInfoList = ohlcvMAsList.map(ohlcvMAs => {
     /** newKlines - length==lineLength */
     let newKlines = {}
-    Object.keys(extractedInfo.klines).forEach(key => {
-      newKlines[key] = extractedInfo.klines[key].slice(start, start + lineLength)
+    Object.keys(ohlcvMAs.klines).forEach(key => {
+      newKlines[key] = [...paddingList, ...ohlcvMAs.klines[key]]
     })
     /** newVolumes */
-    let newVolumes = extractedInfo.volumeLine.slice(start, start + lineLength)
+    let newVolumes = [...paddingList, ...ohlcvMAs.volumeLine]
     /** newPrices */
-    let newCloseLine = extractedInfo.closeLine.slice(start, start + lineLength)
-    let newOpenLine = extractedInfo.openLine.slice(start, start + lineLength)
-    let newHighLine = extractedInfo.highLine.slice(start, start + lineLength)
-    let newLowLine = extractedInfo.lowLine.slice(start, start + lineLength)
+    let newCloseLine = [...paddingList, ...ohlcvMAs.closeLine]
+    let newOpenLine = [...paddingList, ...ohlcvMAs.openLine]
+    let newHighLine = [...paddingList, ...ohlcvMAs.highLine]
+    let newLowLine = [...paddingList, ...ohlcvMAs.lowLine]
     /** newTimes */
-    let newTimes = extractedInfo.timeLine.slice(start, start + lineLength)
+    let newTimes = [...paddingList, ...ohlcvMAs.timeLine]
 
     return {
-      ...extractedInfo,
+      ...ohlcvMAs,
       klines: newKlines,
       volumeLine: newVolumes,
       closeLine: newCloseLine,
       openLine: newOpenLine,
       highLine: newHighLine,
       lowLine: newLowLine,
-      timeLine: newTimes,
+      timeLine: newTimes
     }
   })
   return newExtractedInfoList
 }
 
-function addVibrateValue(extractedInfoList, observeLength) {
-  for ( let extractedInfo of extractedInfoList ) {
-    let meanClose = _.mean(extractedInfo.closeLine)
+/**
+ * 从ExtractedInfoList里截取出对应长度的
+ * */
+function cutExtractedInfoList (ohlcvMAsList, start, lineLength) {
+  let newExtractedInfoList = ohlcvMAsList.map(ohlcvMAs => {
+    /** newKlines - length==lineLength */
+    let newKlines = {}
+    Object.keys(ohlcvMAs.klines).forEach(key => {
+      newKlines[key] = ohlcvMAs.klines[key].slice(start, start + lineLength)
+    })
+    /** newVolumes */
+    let newVolumes = ohlcvMAs.volumeLine.slice(start, start + lineLength)
+    /** newPrices */
+    let newCloseLine = ohlcvMAs.closeLine.slice(start, start + lineLength)
+    let newOpenLine = ohlcvMAs.openLine.slice(start, start + lineLength)
+    let newHighLine = ohlcvMAs.highLine.slice(start, start + lineLength)
+    let newLowLine = ohlcvMAs.lowLine.slice(start, start + lineLength)
+    /** newTimes */
+    let newTimes = ohlcvMAs.timeLine.slice(start, start + lineLength)
+
+    return {
+      ...ohlcvMAs,
+      klines: newKlines,
+      volumeLine: newVolumes,
+      closeLine: newCloseLine,
+      openLine: newOpenLine,
+      highLine: newHighLine,
+      lowLine: newLowLine,
+      timeLine: newTimes
+    }
+  })
+  return newExtractedInfoList
+}
+
+function addVibrateValue (ohlcvMAsList, observeLength) {
+  for (let ohlcvMAs of ohlcvMAsList) {
+    let meanClose = _.mean(ohlcvMAs.closeLine)
     let totalSquareError = 0
-    let infoLength = extractedInfo.closeLine.length
+    let infoLength = ohlcvMAs.closeLine.length
     let vibrateValue = 0
 //    for (let i=Math.max(infoLength - observeLength + 1, 0); i<infoLength; i++) {
-    for (let i=infoLength - observeLength + 1; i<infoLength; i++) {
+    for (let i = infoLength - observeLength + 1; i < infoLength; i++) {
       /**
        * 只看增长部分
        * */
-//      let increaseValue = (extractedInfo.closeLine[i] - extractedInfo.closeLine[i-1]) / extractedInfo.closeLine[i-1]
+//      let increaseValue = (ohlcvMAs.closeLine[i] - ohlcvMAs.closeLine[i-1]) / ohlcvMAs.closeLine[i-1]
 //      if (increaseValue > 0) {
 //        vibrateValue += increaseValue
 //      }
@@ -142,27 +178,27 @@ function addVibrateValue(extractedInfoList, observeLength) {
        * 均方差
        * */
 //      console.log('meanClose', meanClose)
-//      if (extractedInfo.closeLine[i] === undefined) {
+//      if (ohlcvMAs.closeLine[i] === undefined) {
 //        console.log('i', i)
 //      }
-      totalSquareError = totalSquareError + Math.pow((extractedInfo.closeLine[i] - meanClose)/meanClose, 2)
+      totalSquareError = totalSquareError + Math.pow((ohlcvMAs.closeLine[i] - meanClose) / meanClose, 2)
     }
-    extractedInfo.vibrateValue = vibrateValue
-    extractedInfo.meanSquareError = totalSquareError/observeLength
-//    console.log('extractedInfo.meanSquareError', extractedInfo.meanSquareError)
+    ohlcvMAs.vibrateValue = vibrateValue
+    ohlcvMAs.meanSquareError = totalSquareError / observeLength
+//    console.log('ohlcvMAs.meanSquareError', ohlcvMAs.meanSquareError)
   }
-  return extractedInfoList
+  return ohlcvMAsList
 }
 
-function addWeightValue(extractedInfoList, observeLength) {
-  for ( let extractedInfo of extractedInfoList ) {
-    let profitLine = timeWalkCalcProfit([extractedInfo])
+function addWeightValue (ohlcvMAsList, observeLength) {
+  for (let ohlcvMAs of ohlcvMAsList) {
+    let profitLine = timeWalkCalcProfit([ohlcvMAs])
 
     let weight = 0
     let momentum = 0
     //    for (let i=Math.max(infoLength - observeLength + 1, 0); i<infoLength; i++) {
-    for (let i=Math.max(profitLine.length - observeLength + 1, 0) ; i<profitLine.length; i++) {
-      let priceDifPercent = (profitLine[i] - profitLine[i-1])/profitLine[i-1]
+    for (let i = Math.max(profitLine.length - observeLength + 1, 0); i < profitLine.length; i++) {
+      let priceDifPercent = (profitLine[i] - profitLine[i - 1]) / profitLine[i - 1]
       if (isNaN(priceDifPercent)) { // 当priceDif为0时，处理特殊情况
         priceDifPercent = 0
       }
@@ -197,88 +233,108 @@ function addWeightValue(extractedInfoList, observeLength) {
         }
       }
 
-      if (isNaN(weight)){
+      if (isNaN(weight)) {
         console.log('Math.sqrt(momentum)', Math.sqrt(momentum))
         console.log('diffAbs', diffAbs)
         console.log('momentum', momentum)
         process.exit()
       }
     }
-    extractedInfo.weightValue = weight
+    ohlcvMAs.weightValue = weight
   }
-  return extractedInfoList
+  return ohlcvMAsList
 }
 
 /**
  * 获得最高势能（稳增+阶跃）的几个币
  * */
-function getTopWeighted(extractedInfoList, topWeightNo, observeWindow = 7*24*60/5){
-  extractedInfoList = addWeightValue(extractedInfoList, observeWindow)
+function getTopWeighted (ohlcvMAsList, topWeightNo, observeWindow = 7 * 24 * 60 / 5) {
+  ohlcvMAsList = addWeightValue(ohlcvMAsList, observeWindow)
 
-  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.weightValue)
+  let sortedExtractedInfoList = _.sortBy(ohlcvMAsList, obj => -obj.weightValue)
   return sortedExtractedInfoList.slice(0, topWeightNo)
 }
 
 /**
  * Get top vibrated
  * */
-function getTopVibrated(extractedInfoList, topVibratedNo, observeWindow = 50){
-  extractedInfoList = addVibrateValue(extractedInfoList, observeWindow)
+function getTopVibrated (ohlcvMAsList, topVibratedNo, observeWindow = 50) {
+  ohlcvMAsList = addVibrateValue(ohlcvMAsList, observeWindow)
 
-//  console.log('extractedInfoList', extractedInfoList.map(o => `${o.symbol} ${o.meanSquareError}`))
+//  console.log('ohlcvMAsList', ohlcvMAsList.map(o => `${o.symbol} ${o.meanSquareError}`))
 
-  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => obj.meanSquareError)
+  let sortedExtractedInfoList = _.sortBy(ohlcvMAsList, obj => obj.meanSquareError)
 
 //  console.log('sortedExtractedInfoList', sortedExtractedInfoList.map(o => `${o.symbol} ${o.meanSquareError}`))
 
   return sortedExtractedInfoList.slice(0, topVibratedNo)
 }
 
-function addBTCVolValue(extractedInfoList, observeWindow) {
-  for ( let extractedInfo of extractedInfoList ) {
-    let infoLength = extractedInfo.closeLine.length
+function addBTCVolValue (ohlcvMAsList, observeWindow) {
+  for (let ohlcvMAs of ohlcvMAsList) {
+    // console.log('ohlcvMAs', ohlcvMAs)
+    let infoLength = ohlcvMAs.data.length
     let totalVolume = 0
-    for (let i=infoLength - observeWindow; i<infoLength; i++) {
+    for (let i = infoLength - observeWindow; i < infoLength; i++) {
       /**
        * 对应的BTCVolume = volume * price
        * */
-      let BTCVolume = extractedInfo.closeLine[i] * extractedInfo.volumeLine[i]
+      let BTCVolume = ohlcvMAs.data[i].close * ohlcvMAs.data[i].volume
       totalVolume += BTCVolume
     }
-    extractedInfo.BTCVolume = totalVolume
+    ohlcvMAs.BTCVolume = totalVolume
   }
-  return extractedInfoList
+  return ohlcvMAsList
+}
+
+/**
+ * 显示过去时间，除了已经在exceptList里vol活跃度最高的币
+ * @param {*} ohlcvMAsList
+ * @param {number} observeWindow 用多少个k线点来判断最高流量
+ * @param {integer} symbolNumber 显示多少个币
+ * @param {number} [threshold] 超过这个threshold才会显示
+ * @param {[*]} [exceptList] 如果有exceptList，则只会显示排除exceptList之外的
+ */
+function logSymbolsBasedOnVolPeriod (ohlcvMAsList, observeWindow, symbolNumber, threshold, exceptList) {
+    /*
+    * 显示除了已经在whiteList里，vol最高的前10
+    * */
+  let topVolumeList = getTopVolume(ohlcvMAsList, undefined, observeWindow, threshold)
+  if (exceptList && exceptList.length > 0) {
+    topVolumeList = _.filter(topVolumeList, o => exceptList.indexOf(o.symbol) === -1)
+  }
+  topVolumeList = topVolumeList.slice(0, symbolNumber)
+
+  log(`Top volume ${observeWindow * 5} mins: `.yellow + topVolumeList.map(o => (
+      `${o.symbol}: `.yellow + `${Math.round(o.BTCVolume)}`.green
+    )).join(' '))
 }
 
 /**
  * Get Top Volume
  * */
-function getTopVolume(extractedInfoList, topVolumeNo=undefined, observeWindow = 50, volumeThreshold=undefined){
-  addBTCVolValue(extractedInfoList, observeWindow)
-  let sortedExtractedInfoList = _.sortBy(extractedInfoList, obj => -obj.BTCVolume)
+function getTopVolume (ohlcvMAsList, topVolumeNo = undefined, observeWindow = 50, volumeThreshold = undefined) {
+  ohlcvMAsList = addBTCVolValue(ohlcvMAsList, observeWindow)
+  let sortedExtractedInfoList = _.sortBy(ohlcvMAsList, obj => -obj.BTCVolume)
   if (volumeThreshold) {
     sortedExtractedInfoList = _.filter(sortedExtractedInfoList, obj => (obj.BTCVolume > volumeThreshold))
   }
   return sortedExtractedInfoList.slice(0, topVolumeNo)
 }
 
-function generateCutProfitList(extractedInfo, observeWindow, dynamicProfitList) {
+function generateCutProfitList (ohlcvMAs, observeWindow, dynamicProfitList) {
   let totalChange = 0
-  let highLine = extractedInfo.highLine.slice(-observeWindow)
-  let lowLine = extractedInfo.lowLine.slice(-observeWindow)
-  let openLine = extractedInfo.openLine.slice(-observeWindow)
-  let closeLine = extractedInfo.closeLine.slice(-observeWindow)
-  let accumulatedProfit = 0
-
-  for (let i=0; i<openLine.length; i++) {
-    totalChange += (100 * (highLine[i] - lowLine[i])/openLine[i])
-    accumulatedProfit += (100 * (closeLine[i] - openLine[i])/openLine[i])
+  let end = ohlcvMAs.data.length - 1
+  let start = ohlcvMAs.data.length - observeWindow
+  for (let i = start; i <= end; i++) {
+    let {high, low, open} = ohlcvMAs.data[i]
+    totalChange += (100 * (high - low) / open)
   }
   let avgChange = totalChange / observeWindow
 
-  return dynamicProfitList.map(dynamicProfit=>({
+  return dynamicProfitList.map(dynamicProfit => ({
     value: avgChange * dynamicProfit.multiplier,
-    percent: dynamicProfit.percent,
+    percent: dynamicProfit.percent
   }))
 
 //    return [
@@ -297,6 +353,103 @@ function generateCutProfitList(extractedInfo, observeWindow, dynamicProfitList) 
 //  ]
 }
 
+function printLine (lineData) {
+  const chart = asciichart.plot(lineData, {height: 15})
+  log.yellow('\n' + chart, '\n')
+}
+
+async function fetchNewPointAndAttach (ohlcvMAsList, exchangeId, windows) {
+  /**
+   * fetch 两个新点，并更新ohlcvMAList
+   * */
+  let symbols = ohlcvMAsList.map(o => o.symbol)
+  let newPointsList = await klineListGetDuringPeriod(exchangeId, symbols, 2)
+  let sliceEnd = ohlcvMAsList[0].data.length - 2
+
+  let updatedInfoList = ohlcvMAsList.map(ohlcvMAs => {
+    // 更新2点，保证前面点的close值为exchange最终值
+    let newPoints = _.find(newPointsList, {symbol: ohlcvMAs.symbol})
+
+    /**
+     * 当ohlcvMA的最后一个点未更新完毕，则保留点 0 - length-3，最后两点更新
+     * 当ohlcvMA的最后一个点更新完毕时，则保留点 1 - length-2，最后添加两点
+     * */
+    let shift = ohlcvMAs.data.slice(-1)[0].timeStamp !== newPoints.data.slice(-1)[0].timeStamp ? 1 : 0
+    let updatedInfo = {
+      ...ohlcvMAs,
+      data: [ ...ohlcvMAs.data.slice(shift, sliceEnd + shift), ...newPoints.data.slice(-2) ]
+    }
+    return updatedInfo
+  })
+
+  return updatedInfoList
+}
+
+/**
+ * 计算MA, 并返回添加MA后的ohlcvMAList
+ * @param {*} ohlcvList
+ * @param {[Integer]} windows
+ */
+function calcMovingAverge (ohlcvList, windows) {
+  ohlcvList.forEach(ohlcvs => {
+    let closeList = ohlcvs.data.map(ohlcv => ohlcv.close)
+    for (let i = closeList.length - 3; i < closeList.length; i++) {
+      for (let window of windows) {
+        if (i >= window - 1) {
+          let MA = _.mean(closeList.slice(i - window + 1, i + 1))
+          ohlcvs.data[i][`MA${window}`] = MA
+        }
+      }
+    }
+  })
+  return ohlcvList
+}
+
+function checkMemory () {
+  /**
+   * Determine memory leak
+   * */
+  try {
+    global.gc()
+  } catch (e) {
+    console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
+    process.exit()
+  }
+  var heapUsed = process.memoryUsage().heapUsed
+  if (heapUsed > 200 * 1024 * 1024) { // 如果使用过限内存，则报警
+    console.log('Warning: Program is using more than ' + heapUsed / (1024 * 1024) + ' MB of Heap.')
+  }
+}
+
+/**
+ * 计算有多少连续增长的k线
+ * @param {*} ohlcvMAs
+ * @param {*} observeWindow
+ */
+function calcContinuousKlineIncrease (ohlcvMAs, observeWindow) {
+  let continousIncreaseList = []
+  let increaseCount = 0
+  for (let i = ohlcvMAs.data.length - observeWindow; i < ohlcvMAs.data.length; i++) {
+    if (ohlcvMAs.data[i].close > ohlcvMAs.data[i].open) {
+      increaseCount++
+    } else {
+      if (increaseCount > 0) {
+        continousIncreaseList.push(increaseCount)
+      }
+      increaseCount = 0
+    }
+  }
+  return {
+    mean: _.mean(continousIncreaseList).toFixed(2),
+    sum: _.sum(continousIncreaseList),
+    median: continousIncreaseList.sort()[Math.trunc(continousIncreaseList.length / 2)]
+  }
+}
+
+function getTargetCurrencyFromSymbol (symbol) {
+  return symbol.split('/')[0]
+}
+
 module.exports = {
   getMarkets,
   saveJsonToCSV,
@@ -311,4 +464,12 @@ module.exports = {
   addBTCVolValue,
   getTopWeighted,
   generateCutProfitList,
+  printLine,
+  addPaddingExtractedInfoList,
+  fetchNewPointAndAttach,
+  calcMovingAverge,
+  logSymbolsBasedOnVolPeriod,
+  checkMemory,
+  calcContinuousKlineIncrease,
+  getTargetCurrencyFromSymbol
 }

@@ -4,7 +4,8 @@ const _ = require('lodash')
 const {
   generateCutProfitList,
   retryMutationTaskIfTimeout,
-  retryQueryTaskIfAnyError
+  retryQueryTaskIfAnyError,
+  getTargetCurrencyFromSymbol
 } = require('./utils')
 
 const api = require('./api')
@@ -60,7 +61,6 @@ module.exports = class Worker {
       let buyInAmount = maxAmount * 0.21
       buyInAmount = buyInAmount > 1 ? Math.trunc(buyInAmount) : buyInAmount
       let buyResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketBuyOrder', [this.symbol, buyInAmount, {'recvWindow': 60*10*1000}])
-      //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
       log(`Second buy result`, buyResult)
       if (!buyResult || buyResult.status !== 'closed') {
         throw new Error('Second purchase error!')
@@ -71,7 +71,6 @@ module.exports = class Worker {
       buyInAmount = maxAmount * 0.07
       buyInAmount = buyInAmount > 1 ? Math.trunc(buyInAmount) : buyInAmount
       buyResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketBuyOrder', [this.symbol, buyInAmount, {'recvWindow': 60*10*1000}])
-      //          let buyResult = await exchange.createMarketBuyOrder(symbol, maxAmount * 0.7)
       log(`Third buy result`, buyResult)
       if (!buyResult || buyResult.status !== 'closed') {
         throw new Error('Third purchase error!')
@@ -89,11 +88,17 @@ module.exports = class Worker {
     log(`--- Finished task: Worker finish buying ${this.currencyAmount} ${this.symbol} at the price: ${this.buyPrice}; Total BTC of this worker: ${this.BTCAmount}\n`.green)
   }
 
-  async updateCutProfitFilledAmount () {
+  /**
+   * 查看有多少orders被filled了，并更新this.filledAmount
+   * @param {*} [fetchedOrders] // 如果没有定义，则会调用fetchOrders获得
+   */
+  async updateCutProfitFilledAmount (fetchedOrders) {
     /*
     * 查看limit order的filled amount
     * */
-    let fetchedOrders = await retryQueryTaskIfAnyError(this.exchange, 'fetchOrders', [this.symbol])
+    if (!fetchedOrders) {
+      fetchedOrders = await retryQueryTaskIfAnyError(this.exchange, 'fetchOrders', [this.symbol])
+    }
     let filledAmount = 0
     for (let limitOrder of this.limitOrders) {
       let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
@@ -119,7 +124,7 @@ module.exports = class Worker {
    * @param {Number} [targetBTCAmount] 要获得多少BTC，默认为undefined
    */
   async marketSell (ohlcvMAs, targetBTCAmount = undefined) {
-    let targetCurrency = this.symbol.split('/')[0]
+    let targetCurrency = getTargetCurrencyFromSymbol(this.symbol)
     let targetBalance = (await retryQueryTaskIfAnyError(this.exchange, 'fetchBalance', [{'recvWindow': 60*10*1000}]))['free'][targetCurrency]
     let sellAmount
     /**
@@ -213,7 +218,7 @@ module.exports = class Worker {
   async cancelCutProfitOrders () {
     log(`--- Start Task: Worker for ${this.symbol} is cancelling limit sell orders`.green)
     let fetchedOrders = await retryQueryTaskIfAnyError(this.exchange, 'fetchOrders', [this.symbol])
-    await this.updateCutProfitFilledAmount()
+    await this.updateCutProfitFilledAmount(fetchedOrders)
     /**
      * 取消被程序创建且当前为open的order
      * */

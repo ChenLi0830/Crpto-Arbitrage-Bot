@@ -4,6 +4,7 @@ const _ = require('lodash')
 const ccxt = require('ccxt')
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
 const uuidv4 = require('uuid/v4')
+const {getTargetCurrencyFromSymbol} = require('./utils')
 
 module.exports = class SimulatedExchange {
   constructor (
@@ -99,9 +100,32 @@ module.exports = class SimulatedExchange {
     this.ohlcvMAsList = this._calcOhlcvMAsList()
   }
 
+  /**
+   * 模拟市场经历了stepSizeInMillesec时间的变化
+   */
   nextStep () {
     this.currentTime = `${Number(this.currentTime) + this.stepSizeInMillesec}`
     this.ohlcvMAsList = this._calcOhlcvMAsList()
+    /**
+     * 更新limitSellOrder
+     */
+    this.limitSellOrders.forEach(order => {
+      let pastOhlcvMAs = _.find(this.ohlcvMAsList, {symbol: order.symbol}).data.slice(-2)[0]
+      /**
+       * 保证过去的这一根k线是在设置order的那根k线之后
+       */
+      if (order.timestamp > pastOhlcvMAs.timeStamp) {
+        /**
+         * 如果过去的这根k线的high值大于止盈，则order被filled，更新BTC值
+         */
+        if (pastOhlcvMAs.high > order.price) {
+          order.status = 'closed'
+          order.filled = order.amount
+          let earnedBTCAmount = order.amount * order.price
+          this.balance['BTC'] += earnedBTCAmount
+        }
+      }
+    })
   }
 
   fetchBalance () {
@@ -120,11 +144,18 @@ module.exports = class SimulatedExchange {
   }
 
   createMarketBuyOrder (symbol, buyInAmount) {
-    this.balance[symbol] = this.balance[symbol] === undefined ? buyInAmount : this.balance[symbol] + buyInAmount
+    let targetCurrency = getTargetCurrencyFromSymbol(symbol)
+    let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
+    let price = ohlcvMAs.data.slice(-1)[0].close
+    let timeStamp = this.ohlcvMAsList[0].data.slice(-1)[0].timeStamp
+
+    this.balance[targetCurrency] = this.balance[targetCurrency] === undefined ? buyInAmount : this.balance[targetCurrency] + buyInAmount
+    this.balance['BTC'] = this.balance['BTC'] - buyInAmount * price
+
     return {
       id: uuidv4(),
-      timestamp: new Date().getTime(),
-      datetime: new Date(),
+      timestamp: timeStamp,
+      datetime: new Date(timeStamp),
       symbol: symbol,
       type: 'market',
       side: 'buy',
@@ -139,15 +170,24 @@ module.exports = class SimulatedExchange {
   }
 
   fetchOrders (symbol) {
-    return this.limitSellOrders
+    let orders = _.filter(this.limitSellOrders, {symbol})
+    return orders
   }
 
   createMarketSellOrder (symbol, sellAmount) {
-    this.balance[symbol] = this.balance[symbol] - sellAmount
+    let targetCurrency = getTargetCurrencyFromSymbol(symbol)
+    let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
+    // 以最后一根的open价来卖
+    let price = ohlcvMAs.data.slice(-1)[0].open
+    let timeStamp = this.ohlcvMAsList[0].data.slice(-1)[0].timeStamp
+
+    this.balance['BTC'] = this.balance['BTC'] + sellAmount * price
+    this.balance[targetCurrency] = this.balance[targetCurrency] - sellAmount
+
     return {
       id: uuidv4(),
-      timestamp: new Date().getTime(),
-      datetime: new Date(),
+      timestamp: timeStamp,
+      datetime: new Date(timeStamp),
       symbol: symbol,
       type: 'market',
       side: 'sell',
@@ -163,19 +203,30 @@ module.exports = class SimulatedExchange {
 
   createLimitSellOrder (symbol, amount, price) {
     let id = uuidv4()
+    let timeStamp = this.ohlcvMAsList[0].data.slice(-1)[0].timeStamp
     let order = {
       id,
+      timestamp: timeStamp,
+      datetime: new Date(timeStamp),
+      symbol,
       amount,
       price,
       status: 'open',
       filled: 0
     }
+
     this.limitSellOrders.push(order)
+    let targetCurrency = getTargetCurrencyFromSymbol(symbol)
+    this.balance[targetCurrency] = this.balance[targetCurrency] - amount
+
     return order
   }
 
   cancelOrder (orderId, symbol) {
-    let index = _.findIndex(this.limitSellOrders, {id: orderId})
-    this.limitSellOrders.splice(index, 1)
+    let order = _.find(this.limitSellOrders, {id: orderId})
+    order.status = 'canceled'
+
+    let targetCurrency = getTargetCurrencyFromSymbol(symbol)
+    this.balance[targetCurrency] = this.balance[targetCurrency] + order.amount
   }
 }

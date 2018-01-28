@@ -41,9 +41,10 @@ let logTopVolWindow = 15 / 5 // 显示 Volume 白名单候选币，观察几个�
 let logTopVolSymbolNumber = 10 // 显示 Volume 白名单候选币，显示几个
 let logTopVolThreshold // 显示 Volume 白名单候选币，threshold
 let volWindow = 48 // volume均线的window
-let buyLimitInBTC = 0.02 // 最多每个worker花多少BTC买币
+let buyLimitInBTC = 1 // 最多每个worker花多少BTC买币
 let useLockProfit = false // 是否开启止盈保本
 let useVolAsCriteria = true // 是否用volume作为选币依据
+let isSimulation = true // 是否使用模拟模式
 let simuBalance = 1 // 初始 BTC Balance
 let simuTradingFee = 0.0005 // 交易费
 let simuDuration = 7 * 24 * 60 * 60 * 1000 // 模拟进行时长，单位为毫秒
@@ -100,6 +101,7 @@ module.exports = {
   volWindow,
   buyLimitInBTC,
   useLockProfit,
+  isSimulation,
   simuBalance,
   simuTradingFee,
   simuDuration,

@@ -446,6 +446,10 @@ function calcContinuousKlineIncrease (ohlcvMAs, observeWindow) {
   }
 }
 
+function getTargetCurrencyFromSymbol (symbol) {
+  return symbol.split('/')[0]
+}
+
 module.exports = {
   getMarkets,
   saveJsonToCSV,
@@ -466,5 +470,6 @@ module.exports = {
   calcMovingAverge,
   logSymbolsBasedOnVolPeriod,
   checkMemory,
-  calcContinuousKlineIncrease
+  calcContinuousKlineIncrease,
+  getTargetCurrencyFromSymbol
 }

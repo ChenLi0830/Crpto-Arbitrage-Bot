@@ -110,12 +110,9 @@ module.exports = class SimulatedExchange {
    */
   nextStep () {
     this.currentTime = `${Number(this.currentTime) + this.stepSizeInMillesec}`
-    /**
-     * 检查模拟过程是否结束
-     */
     if (this.currentTime > this.endTime) {
       /**
-       * 统计余额
+       * 模拟过程结束: 统计BTC余额，保存tradingRecord
        */
       let BTCBalance = this.balance['BTC']
       Object.keys(this.balance).forEach(currencyKey => {
@@ -126,9 +123,6 @@ module.exports = class SimulatedExchange {
           BTCBalance += currencyPrice * currencyBalance
         }
       })
-      /**
-       * 保存文件
-       */
       saveJsonToCSV(this.tradingRecord, ['event', 'amount', 'price', 'type', 'time'], `./savedData/klines/simulationTradingRecords.csv`)
       return BTCBalance
     }
@@ -156,7 +150,7 @@ module.exports = class SimulatedExchange {
             amount: order.amount,
             price: order.price,
             type: 'limitOrder',
-            time: moment(order.timestamp).format('MMMM Do YYYY, h:mm:ss a')
+            time: moment(Number(order.timestamp)).format('MMMM Do YYYY, h:mm:ss a')
           })
         }
       }
@@ -192,13 +186,13 @@ module.exports = class SimulatedExchange {
       amount: amount,
       price: price,
       type: 'marketOrder',
-      time: moment(timeStamp).format('MMMM Do YYYY, h:mm:ss a')
+      time: moment(Number(timeStamp)).format('MMMM Do YYYY, h:mm:ss a')
     })
 
     return {
       id: uuidv4(),
       timestamp: timeStamp,
-      datetime: new Date(timeStamp),
+      datetime: new Date(Number(timeStamp)),
       symbol: symbol,
       type: 'market',
       side: 'buy',
@@ -232,13 +226,13 @@ module.exports = class SimulatedExchange {
       amount,
       price,
       type: 'marketOrder',
-      time: moment(timeStamp).format('MMMM Do YYYY, h:mm:ss a')
+      time: moment(Number(timeStamp)).format('MMMM Do YYYY, h:mm:ss a')
     })
 
     return {
       id: uuidv4(),
       timestamp: timeStamp,
-      datetime: new Date(timeStamp),
+      datetime: new Date(Number(timeStamp)),
       symbol: symbol,
       type: 'market',
       side: 'sell',
@@ -258,7 +252,7 @@ module.exports = class SimulatedExchange {
     let order = {
       id,
       timestamp: timeStamp,
-      datetime: new Date(timeStamp),
+      datetime: new Date(Number(timeStamp)),
       symbol,
       amount,
       price,

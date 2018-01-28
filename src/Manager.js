@@ -32,6 +32,7 @@ module.exports = class Manager {
     this.workerList = [] // 记录所有active的worker
     this.eventList = [] // 记录买币和卖币events
     this.symbolPool = [] // 统计所有白名单黑名单后，最终会从这个pool里挑选币
+    this.simulationResultBalance = undefined // 在模拟中记录的最终BTC balance结果
     this.updateParams(params) // 更新所有params里包含的参数
   }
 
@@ -138,7 +139,11 @@ module.exports = class Manager {
      * 模拟环境中读取数据
      */
     if (this.isSimulation) {
-      this.exchange.nextStep()
+      let BTCBalance = this.exchange.nextStep()
+      if (BTCBalance !== undefined) {
+        this.simulationResultBalance = BTCBalance
+        return
+      }
       this.ohlcvMAsList = calcMovingAverge(this.exchange.ohlcvMAsList, this.windows)
     }
     /**
@@ -479,6 +484,10 @@ module.exports = class Manager {
          * 获取新数据
          */
         await this.fetchData()
+        /**
+         * 检查在模拟，并且获得了结果
+         */
+        if (this.simulationResultBalance) return this.simulationResultBalance
         /**
          * 检查是否需要卖币
          */

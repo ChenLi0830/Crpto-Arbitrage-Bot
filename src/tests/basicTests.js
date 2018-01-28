@@ -240,7 +240,8 @@ async function testSimulation () {
   await simulatedExchange.initExchange()
 
   let manager = new Manager(simulatedExchange, credentials[exchangeId], params)
-  await manager.start()
+  let BTCResult = await manager.start()
+  console.log('BTCResult', BTCResult)
 }
 
 async function main () {

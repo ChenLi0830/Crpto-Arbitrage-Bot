@@ -105,10 +105,17 @@ module.exports = class SimulatedExchange {
    */
   nextStep () {
     this.currentTime = `${Number(this.currentTime) + this.stepSizeInMillesec}`
-    this.ohlcvMAsList = this._calcOhlcvMAsList()
     /**
-     * 更新limitSellOrder
+     * 检查模拟过程是否结束
      */
+    if (this.currentTime > this.endTime) {
+      // 总结模拟过程，并保存到文件，完事
+      process.exit()
+    }
+    /**
+     * 得到新数据，并更新this.limitSellOrders
+     */
+    this.ohlcvMAsList = this._calcOhlcvMAsList()
     this.limitSellOrders.forEach(order => {
       let pastOhlcvMAs = _.find(this.ohlcvMAsList, {symbol: order.symbol}).data.slice(-2)[0]
       /**

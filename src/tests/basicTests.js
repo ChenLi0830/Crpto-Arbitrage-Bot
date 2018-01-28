@@ -1,9 +1,12 @@
 const credentials = require('../../credentials')
 const Manager = require('../Manager')
 const Worker = require('../Worker')
+const SimulatedExchange = require('../SimulatedExchange')
 const config = require('../config')
 const _ = require('lodash')
 const api = require('../api')
+const klineListGetDuringPeriod = require('../database/klineListGetDuringPeriod')
+const ccxt = require('ccxt')
 
 const {
   numberOfPoints,
@@ -23,10 +26,15 @@ const {
   volWindow,
   buyLimitInBTC,
   dynamicProfitList,
-  useLockProfit
+  useLockProfit,
+  simuBalance,
+  simuTradingFee,
+  simuDuration,
+  simuEndTime,
+  simuTimeStepSize,
+  exchangeId,
+  intervalInMillesec
 } = config
-
-let exchangeId = 'binance'
 
 let params = {
   numberOfPoints,
@@ -52,8 +60,7 @@ let params = {
 async function testWorker () {
   let manager = new Manager(exchangeId, credentials[exchangeId], params)
   await manager.fetchData()
-
-  let worker = new Worker('123', 'ETH/BTC', manager.exchange, manager.updateWorkerList, manager.dynamicProfitList, 0.005, {})
+  let worker = new Worker('123', 'ETH/BTC', manager.exchange, manager.dynamicProfitList, 0.005, {})
   let ohlcvMAs = _.find(manager.ohlcvMAsList, {symbol: 'ETH/BTC'})
   console.log('ohlcvMA', ohlcvMAs.data.slice(-2))
   await worker.marketBuy(ohlcvMAs)
@@ -80,6 +87,18 @@ async function testManager () {
   let manager = new Manager(exchangeId, credentials[exchangeId], params)
 
   /**
+   * 测试logMarket
+   */
+  // await manager.fetchData()
+  // manager._pickSymbolsFromMarket()
+  // while (true) {
+  //   // manager._logMarket()
+  //   manager._hotReloadParams()
+  //   console.log('manager.windows', manager.windows)
+  //   await api.sleep(200)
+  // }
+
+  /**
    * 测试fetch数据
    */
   // while (true) {
@@ -92,14 +111,14 @@ async function testManager () {
   /**
    * 测试买卖，取消和创建orders
    */
-  await manager.fetchData()
+  // await manager.fetchData()
   // await manager._buySymbols(['ETH/BTC', 'ADA/BTC', 'EVX/BTC'])
-  await manager._buySymbols(['ADA/BTC'])
+  // await manager._buySymbols(['ADA/BTC'])
   // let ethWorker = _.find(manager.workerList, o => o.symbol === 'ETH/BTC')
   // await manager._workersSellAndRemove([ethWorker])
   // await manager._buySymbols(['EVX/BTC'])
-  let adaWorker = _.find(manager.workerList, o => o.symbol === 'ADA/BTC')
-  await manager._workersSellAndRemove([adaWorker])
+  // let adaWorker = _.find(manager.workerList, o => o.symbol === 'ADA/BTC')
+  // await manager._workersSellAndRemove([adaWorker])
   // let evxWorker = _.find(manager.workerList, o => o.symbol === 'EVX/BTC')
   // await manager._workersSellAndRemove([adaWorker, evxWorker])
   // // await manager._buySymbols(['ADA/BTC'])
@@ -113,7 +132,7 @@ async function testManager () {
   /**
    * 测试运行
    */
-  // await manager.start()
+  await manager.start()
   // await manager.loadBalance()
   // await manager.fetchData()
   // console.log('manager.ohlcvMAList.length', manager.ohlcvMAList.length)
@@ -137,10 +156,59 @@ async function testManager () {
   // manager._getWhiteList(['ADA/BTC', 'LTC/BTC'], long, short, ['ETH/BTC'])
 }
 
+async function testSimulatedExchange () {
+  /**
+   * 从SimulatedExchange外部获取数据源，好处是可以重复使用
+   */
+  let totalNumberOfPoints = Math.trunc(simuDuration / intervalInMillesec)
+  let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}))
+  await exchange.loadMarkets()
+  let symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
+  let dataSource = await klineListGetDuringPeriod(exchangeId, symbols, totalNumberOfPoints, simuEndTime)
+
+  let params = {
+    numberOfPoints,
+    padding,
+    intervalInMillesec,
+    ohlcvMAsListSource: dataSource
+  }
+
+  let simulatedExchange = new SimulatedExchange(
+    exchangeId,
+    simuBalance,
+    simuTradingFee,
+    simuDuration,
+    simuEndTime,
+    simuTimeStepSize,
+    params
+  )
+
+  /**
+   * 测试基础methods
+   */
+  await simulatedExchange.initExchange()
+  console.log(simulatedExchange.ohlcvMAsList[0].data.slice(-2))
+  simulatedExchange.nextStep()
+  console.log(simulatedExchange.ohlcvMAsList[0].data.slice(-2))
+  console.log('simulatedExchange.symbols', simulatedExchange.symbols)
+
+  let symbol = 'ETH/BTC'
+  let worker = new Worker('123', symbol, simulatedExchange, dynamicProfitList, 0.1, {})
+  let ohlcvMAs = _.find(simulatedExchange.ohlcvMAsList, {symbol: 'ETH/BTC'})
+  console.log('ohlcvMA', ohlcvMAs.data.slice(-2))
+
+  await worker.marketBuy(ohlcvMAs)
+  // await worker.createCutProfitOrders(ohlcvMAs)
+  // await worker.updateRemainingBTCAmount()
+  // console.log(worker.remainingBTC)
+  // markets
+}
+
 async function main () {
   try {
     // await testWorker()
-    await testManager()
+    // await testManager()
+    await testSimulatedExchange()
   }
   catch (error) {
     console.log(error)

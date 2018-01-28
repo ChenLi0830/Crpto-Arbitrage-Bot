@@ -121,8 +121,9 @@ module.exports = class SimulatedExchange {
       let BTCBalance = this.balance['BTC']
       Object.keys(this.balance).forEach(currencyKey => {
         let currencyBalance = this.balance[currencyKey]
+        let symbol = `${currencyKey}/BTC`
         if (currencyKey !== 'BTC' && currencyBalance > 0) {
-          let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol: `${currencyKey}/BTC`})
+          let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
           let currencyPrice = ohlcvMAs.data.slice(-1)[0].close
           BTCBalance += currencyPrice * currencyBalance
         }

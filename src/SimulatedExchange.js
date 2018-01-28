@@ -175,11 +175,11 @@ module.exports = class SimulatedExchange {
   createMarketBuyOrder (symbol, amount) {
     let targetCurrency = getTargetCurrencyFromSymbol(symbol)
     let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
-    let price = ohlcvMAs.data.slice(-1)[0].close * (1 + this.tradingFee)
+    let price = ohlcvMAs.data.slice(-1)[0].close
     let timeStamp = this.ohlcvMAsList[0].data.slice(-1)[0].timeStamp
 
     this.balance[targetCurrency] = this.balance[targetCurrency] === undefined ? amount : this.balance[targetCurrency] + amount
-    this.balance['BTC'] = this.balance['BTC'] - amount * price
+    this.balance['BTC'] = this.balance['BTC'] - amount * price * (1 + this.tradingFee)
 
     this.tradingRecord.push({
       event: `Buy ${symbol}`,
@@ -215,10 +215,10 @@ module.exports = class SimulatedExchange {
     let targetCurrency = getTargetCurrencyFromSymbol(symbol)
     let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol})
     // 以最后一根的open价来卖
-    let price = ohlcvMAs.data.slice(-1)[0].open * (1 - this.tradingFee)
+    let price = ohlcvMAs.data.slice(-1)[0].open
     let timeStamp = this.ohlcvMAsList[0].data.slice(-1)[0].timeStamp
 
-    this.balance['BTC'] = this.balance['BTC'] + amount * price
+    this.balance['BTC'] = this.balance['BTC'] + amount * price * (1 - this.tradingFee)
     this.balance[targetCurrency] = this.balance[targetCurrency] - amount
 
     this.tradingRecord.push({

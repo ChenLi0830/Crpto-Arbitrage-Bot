@@ -209,11 +209,11 @@ module.exports = class Manager {
      */
     let isFastMAGreater = (ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`] >= ohlcvMAs.data[klineIdx][`MA${this.windows[1]}`]) && (ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`] >= ohlcvMAs.data[klineIdx][`MA${this.windows[2]}`])
     let isMiddleMAGreater = ohlcvMAs.data[klineIdx][`MA${this.windows[1]}`] >= ohlcvMAs.data[klineIdx][`MA${this.windows[2]}`]
-    let priceGreaterThanFastMA = ohlcvMAs.data[klineIdx].close > ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`]
-    let isFastMAIncreasing = ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`] > ohlcvMAs.data[klineIdx - 1][`MA${this.windows[0]}`]
-    let isMiddleMAIncreasing = ohlcvMAs.data[klineIdx][`MA${this.windows[1]}`] > ohlcvMAs.data[klineIdx - 1][`MA${this.windows[1]}`]
-    let isSlowMAIncreasing = ohlcvMAs.data[klineIdx][`MA${this.windows[2]}`] > ohlcvMAs.data[klineIdx - 1][`MA${this.windows[2]}`]
-    let isKlineHigherThanPrevPoint = (ohlcvMAs.data[klineIdx].open > ohlcvMAs.data[klineIdx - 1].open) && (ohlcvMAs.data[klineIdx].close > ohlcvMAs.data[klineIdx - 1].close)
+    let priceGreaterThanFastMA = ohlcvMAs.data[klineIdx].close >= ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`]
+    let isFastMAIncreasing = ohlcvMAs.data[klineIdx][`MA${this.windows[0]}`] >= ohlcvMAs.data[klineIdx - 1][`MA${this.windows[0]}`]
+    let isMiddleMAIncreasing = ohlcvMAs.data[klineIdx][`MA${this.windows[1]}`] >= ohlcvMAs.data[klineIdx - 1][`MA${this.windows[1]}`]
+    let isSlowMAIncreasing = ohlcvMAs.data[klineIdx][`MA${this.windows[2]}`] >= ohlcvMAs.data[klineIdx - 1][`MA${this.windows[2]}`]
+    let isKlineHigherThanPrevPoint = (ohlcvMAs.data[klineIdx].open >= ohlcvMAs.data[klineIdx - 1].open) && (ohlcvMAs.data[klineIdx].close >= ohlcvMAs.data[klineIdx - 1].close)
     let matchPriceCriteria = isFastMAGreater && isMiddleMAGreater && priceGreaterThanFastMA && isFastMAIncreasing && isMiddleMAIncreasing && isSlowMAIncreasing && isKlineHigherThanPrevPoint
 
     return matchVolCriteria && matchPriceCriteria

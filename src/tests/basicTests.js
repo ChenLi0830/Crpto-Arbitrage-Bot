@@ -9,6 +9,7 @@ const klineListGetDuringPeriod = require('../database/klineListGetDuringPeriod')
 const ccxt = require('ccxt')
 const fs = require('fs')
 const util = require('util')
+const {checkMemory} = require('../utils')
 
 const {
   numberOfPoints,
@@ -238,6 +239,7 @@ async function testSimulation () {
 }
 
 async function testParamsInSimulation () {
+  checkMemory('debug')
   /**
    * 从SimulatedExchange外部获取数据源，好处是可以重复使用
    */
@@ -245,7 +247,10 @@ async function testParamsInSimulation () {
   let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}))
   await exchange.loadMarkets()
   let symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
+  
+  console.time('LoadData')
   let dataSource = await klineListGetDuringPeriod(exchangeId, symbols, totalNumberOfPoints, simuEndTime)
+  console.timeEnd('LoadData')
 
   let SimuParams = {
     numberOfPoints,
@@ -254,43 +259,26 @@ async function testParamsInSimulation () {
     ohlcvMAsListSource: dataSource
   }
 
-  let simulatedExchange = new SimulatedExchange(
-    exchangeId,
-    simuBalance,
-    simuTradingFee,
-    simuDuration,
-    simuEndTime,
-    simuTimeStepSize,
-    SimuParams
-  )
-
   let bestBalance = 0
   let bestParams = {}
-
-  function numberRange (start, end) {
-    return new Array(end - start).fill().map((d, i) => i + start)
-  }
-
-  console.time('LoadData')
-  await simulatedExchange.initExchange()
-  console.timeEnd('LoadData')
 
   await api.sleep(1000)
   
   console.time('Simulation')
-  for (let window0 of [7]) {
-  for (let window1 of [21]) {
-  for (let window2 of [99]) {
-  for (let dynamicProfit1 of [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]) {
-  for (let dynamicProfit2 of [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]) {
-  for (let dynamicProfit3 of [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]) {
-  for (let dynamicPercent1 of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
-  for (let dynamicPercent2 of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
-  for (let dynamicPercent3 of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
-    if (dynamicProfit1 >= dynamicProfit2 || dynamicProfit2 >= dynamicProfit3) {
+  let counter = 0
+  for (let window0 of [7, 8]) {
+  for (let window1 of [16, 21, 25]) {
+  for (let window2 of [99, 120, 150, 180]) {
+  for (let dynamicProfit1 of [1, 2, 3, 4, 5]) {
+  for (let dynamicProfit2 of [1, 2, 3, 4, 5]) {
+  // // for (let dynamicProfit3 of [1, 2, 3, 4, 5, 6, 7]) {
+  for (let dynamicPercent1 of [10, 30, 50, 70, 90]) {
+  for (let dynamicPercent2 of [10, 30, 50, 70, 90]) {
+  // for (let dynamicPercent3 of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
+    if (dynamicProfit1 >= dynamicProfit2 /* || dynamicProfit2 >= dynamicProfit3 */) {
       continue
     }
-    if (dynamicPercent1 + dynamicPercent2 + dynamicPercent3 >= 100) {
+    if (dynamicPercent1 + dynamicPercent2 /* + dynamicPercent3 */ >= 100) {
       continue
     }
     params.windows = [window0, window1, window2]
@@ -303,15 +291,29 @@ async function testParamsInSimulation () {
         multiplier: dynamicProfit2,
         percent: dynamicPercent2
       },
-      {
-        multiplier: dynamicProfit3,
-        percent: dynamicPercent3
-      }
+      // {
+      //   multiplier: dynamicProfit3,
+      //   percent: dynamicPercent3
+      // }
     ]
-    simulatedExchange.resetSimulation()
+
+    let simulatedExchange = new SimulatedExchange(
+      exchangeId,
+      simuBalance,
+      simuTradingFee,
+      simuDuration,
+      simuEndTime,
+      simuTimeStepSize,
+      SimuParams
+    )
+    await simulatedExchange.initExchange()
+
     let manager = new Manager(simulatedExchange, credentials[exchangeId], params)
     let BTCResult = await manager.start()
+    manager = null
+    delete manager
 
+    counter++
     if (BTCResult > bestBalance) {
       bestBalance = BTCResult
       bestParams = params
@@ -325,8 +327,9 @@ async function testParamsInSimulation () {
   }
   }
   }
-  }
-  }
+  // }
+  // }
+  console.log('counter', counter)
   console.timeEnd('Simulation')
 }
 
@@ -339,6 +342,7 @@ async function main () {
     await testParamsInSimulation()
   } catch (error) {
     console.log(error)
+    console.log(error.stack)
   }
 }
 

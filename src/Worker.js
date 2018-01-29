@@ -10,7 +10,6 @@ const {
 } = require('./utils')
 
 const api = require('./api')
-const player = require('play-sound')(opts = {})
 
 module.exports = class Worker {
   constructor (id, symbol, exchange, dynamicProfitList, BTCAmount, params = {}) {
@@ -30,6 +29,8 @@ module.exports = class Worker {
     this.limitOrders = []
     this.orderFilledAmount = 0 // 创建的limit sell order被filled了多少
     this.remainingBTC = BTCAmount
+
+    this.player = (this.exchange instanceof SimulatedExchange) ? null : require('play-sound')(opts = {})
   }
 
   async marketBuy (ohlcvMAs) {
@@ -40,8 +41,8 @@ module.exports = class Worker {
     let weightedPrice = weightedPrices.avgPrice
     log(`--- Start Task: Worker for ${this.symbol} is buying at ${weightedPrice} with BTCAmount ${this.BTCAmount}`.blue)
 
-    if (!(this.exchange instanceof SimulatedExchange)) {
-      player.play('./src/Glass.aiff', (err) => {
+    if (this.player) {
+      this.player.play('./src/Glass.aiff', (err) => {
         if (err) throw err
       })
     }
@@ -148,8 +149,8 @@ module.exports = class Worker {
     log(`--- Start Task: Worker for ${this.symbol} is selling ${targetCurrency}, balance ${targetBalance}, sell amount ${sellAmount}`.green)
 
     if (targetBTCAmount === undefined) { // 全卖时播放声音
-      if (!(this.exchange instanceof SimulatedExchange)) {
-        player.play('./src/Purr.aiff', (err) => {
+      if (this.player) {
+        this.player.play('./src/Purr.aiff', (err) => {
           if (err) throw err
         })
       }

@@ -405,7 +405,7 @@ function calcMovingAverge (ohlcvList, windows) {
   return ohlcvList
 }
 
-function checkMemory () {
+function checkMemory (logLevel='debug') {
   /**
    * Determine memory leak
    * */
@@ -415,8 +415,11 @@ function checkMemory () {
     console.log("You must run program with 'node --expose-gc index.js' or 'npm start'");
     process.exit()
   }
-  var heapUsed = process.memoryUsage().heapUsed
-  if (heapUsed > 200 * 1024 * 1024) { // 如果使用过限内存，则报警
+  let heapUsed = process.memoryUsage().heapUsed
+  if (logLevel==='debug') {
+    console.log('Program is using ' + heapUsed / (1024 * 1024) + ' MB of Heap.')
+  }
+  else if (heapUsed > 200 * 1024 * 1024) { // 如果使用过限内存，则报警
     console.log('Warning: Program is using more than ' + heapUsed / (1024 * 1024) + ' MB of Heap.')
   }
 }

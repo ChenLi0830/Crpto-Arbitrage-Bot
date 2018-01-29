@@ -28,6 +28,9 @@ async function klineGetDuringPeriod (exchangeId, symbol, startFrom, endTo) {
         return reject(err)
       }
 
+      if (result.length > 0) {
+        result = result
+      }
       result = result.concat(data.Items)
 
       // If there is more to query, then query again
@@ -85,9 +88,16 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
 
     let ohlcvList = await Promise.all(promises)
     /**
+     * Update numberOfPoints in case exchange lost part of the data
+     */
+    if (ohlcvList[0].data.length === ohlcvList[1].data.length && ohlcvList[0].data.length < numberOfPoints) {
+      numberOfPoints = ohlcvList[0].data.length
+    }
+    /**
      * 去掉长度不够的币
      */
-    ohlcvList = _.filter(ohlcvList, ohlcv => ohlcv.data.length >= numberOfPoints)
+
+    ohlcvList = _.filter(ohlcvList, ohlcv => ohlcv.data && ohlcv.data.length >= numberOfPoints)
 
     /**
      * 如果多获取了一个点，则截掉

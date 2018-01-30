@@ -108,23 +108,11 @@ module.exports = class SimulatedExchange {
   }
 
   resetSimulation () {
-    this.balance = null
-    delete this.balance
     this.balance = {BTC: this.originalBTCBalance}
-    this.currentTime = null
-    delete this.currentTime
     this.currentTime = undefined
-    this.stepIndex = null
-    delete this.stepIndex
     this.stepIndex = this.padding + this.numberOfPoints - 1
-    this.limitSellOrders = null
-    delete this.limitSellOrders
     this.limitSellOrders = []
-    this.tradingRecord = null
-    delete this.tradingRecord
     this.tradingRecord = []
-    this.ohlcvMAsList = null
-    delete this.ohlcvMAsList
     this.ohlcvMAsList = this._calcOhlcvMAsList()
   }
 

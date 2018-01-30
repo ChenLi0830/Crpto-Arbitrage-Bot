@@ -28,9 +28,6 @@ async function klineGetDuringPeriod (exchangeId, symbol, startFrom, endTo) {
         return reject(err)
       }
 
-      if (result.length > 0) {
-        result = result
-      }
       result = result.concat(data.Items)
 
       // If there is more to query, then query again

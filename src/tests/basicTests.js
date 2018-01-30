@@ -296,6 +296,7 @@ async function testParamsInSimulation () {
       //   percent: dynamicPercent3
       // }
     ]
+    params.padding = Math.max(...windows)
 
     let simulatedExchange = new SimulatedExchange(
       exchangeId,

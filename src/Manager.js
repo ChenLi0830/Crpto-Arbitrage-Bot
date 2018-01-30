@@ -292,7 +292,7 @@ module.exports = class Manager {
     let ohlcvMAs = _.find(this.ohlcvMAsList, {symbol: worker.symbol})
     await worker.cancelCutProfitOrders()
     await worker.marketSell(ohlcvMAs, toSellBTCAmount)
-    await worker.createCutProfitOrders(ohlcvMAs)
+    await worker.recreateCancelledProfitOrders()
   }
 
   /**

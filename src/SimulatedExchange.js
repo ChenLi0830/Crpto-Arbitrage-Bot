@@ -286,7 +286,12 @@ module.exports = class SimulatedExchange {
       amount,
       price,
       status: 'open',
-      filled: 0
+      filled: 0,
+      cost: amount * price,
+      fee: undefined,
+      remaining: amount,
+      side: 'sell',
+      type: 'limit'
     }
 
     this.limitSellOrders.push(order)

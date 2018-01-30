@@ -30,7 +30,7 @@ module.exports = class Worker {
     this.orderFilledAmount = 0 // 创建的limit sell order被filled了多少
     this.remainingBTC = BTCAmount
 
-    this.player = (this.exchange instanceof SimulatedExchange) ? null : require('play-sound')(opts = {})
+    this.player = (this.exchange instanceof SimulatedExchange) ? null : require('play-sound')()
   }
 
   async marketBuy (ohlcvMAs) {
@@ -174,6 +174,36 @@ module.exports = class Worker {
     this.currencyAmount = this.currencyAmount - sellAmount
   }
 
+  async recreateCancelledProfitOrders () {
+    try {
+      log(`--- Start Task: Worker for ${this.symbol} is recreating cancelled orders`.green)
+      let fetchedOrders = await retryQueryTaskIfAnyError(this.exchange, 'fetchOrders', [this.symbol])
+      /**
+       * 找到最近创建的orders当两个order之间相差10秒，则视为同时下的order
+       * */
+      console.log('fetchedOrders', fetchedOrders)
+      fetchedOrders = _.filter(fetchedOrders, {type: 'limit', side: 'sell'}) // 只保留limit sell orders
+      fetchedOrders = _.sortBy(fetchedOrders, order => -order.timestamp)
+      let canceledOrders = _.filter(fetchedOrders, order => (fetchedOrders[0].timestamp - order.timestamp < 10 * 1000) && order.status === 'canceled')
+      /**
+       * 重建order
+       */
+      let limitOrderTotalPercent = _.sumBy(this.dynamicProfitList, o => o.percent)
+      let totalOrderAmount = canceledOrders.reduce((sum, order) => sum + order.amount, 0)
+      let recreateOrderPromises = canceledOrders.map(order => {
+        let orderPercent = (order.amount / totalOrderAmount) * limitOrderTotalPercent
+        let cutAmount = this.currencyAmount * orderPercent / 100
+        return retryMutationTaskIfTimeout(this.exchange, 'createLimitSellOrder', [this.symbol, cutAmount, order.price, {'recvWindow': 60 * 10 * 1000}])
+      })
+
+      let results = await Promise.all(recreateOrderPromises)
+      console.log('results', results)
+      log(`--- Finished task: Worker for ${this.symbol} finished recreating canceled orders\n`.green)
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
   /**
    * 设置止盈：创建 limit sell orders
    * @param {*} ohlcvMAs
@@ -196,6 +226,7 @@ module.exports = class Worker {
       await Promise.all(createLimitOrderPromises.map(async (createOrderPromise, i) => {
         try {
           let limitOrderResult = await createOrderPromise
+          console.log('limitOrderResult', limitOrderResult)
           if (limitOrderResult && limitOrderResult.id) {
             limitOrders.push({
               id: limitOrderResult.id,

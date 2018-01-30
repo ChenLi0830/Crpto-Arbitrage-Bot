@@ -16,7 +16,7 @@ module.exports = class SimulatedExchange {
       simuBalance,
       simuTradingFee,
       simuDuration,
-      simuEndTime = new Date().getTime(),
+      simuEndTime,
       simuTimeStepSize,
       params
     ) {
@@ -33,7 +33,7 @@ module.exports = class SimulatedExchange {
     this.tradingFee = simuTradingFee
     this.numberOfPoints = numberOfPoints
     this.padding = padding
-    this.endTime = simuEndTime
+    this.endTime = simuEndTime || new Date().getTime() - intervalInMillesec
     this.startTime = this.endTime - simuDuration
     this.currentTime = undefined // 第一次_calcOhlcvMAsList时，初始化为第一组ohlcvMAsList数据对应的timeStamp
     this.stepSizeInMillesec = simuTimeStepSize
@@ -167,7 +167,7 @@ module.exports = class SimulatedExchange {
             amount: order.amount,
             price: order.price,
             type: 'limitOrder',
-            time: moment(Number(order.timestamp)).format('MMMM Do YYYY, h:mm:ss a')
+            time: moment(Number(this.currentTime)).format('MMMM Do YYYY, h:mm:ss a')
           })
         }
       }

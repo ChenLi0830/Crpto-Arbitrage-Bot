@@ -245,7 +245,7 @@ async function testParamsInSimulation () {
    */
   params.padding = 180 // maximum potential value of the windows in the loop below
   
-  let totalNumberOfPoints = Math.trunc(simuDuration / intervalInMillesec)
+  let totalNumberOfPoints = Math.trunc(simuDuration / intervalInMillesec) + params.padding
   let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}))
   await exchange.loadMarkets()
   let symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))

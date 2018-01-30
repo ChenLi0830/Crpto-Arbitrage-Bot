@@ -14,11 +14,14 @@ let intervalInMins = 5
 let recordNb = 500 // default = 500, use less for large intervals,
 let numberOfFetch = 1 // min = 1, 获取多少次500个点，数字越大，获得的历史数据越多,
 
-let windows = [4, 16, 99] // 必须从小到大，maximum = 500 - lineLength,
+let windows = [7, 16, 120] // 必须从小到大，maximum = 500 - lineLength,
 // let windows = [5, 15, 99] // 必须从小到大，maximum = 500 - lineLength,
 let KLINE_FILE = `./savedData/klines/klines-${interval}-${Math.round(numberOfFetch * intervalInMins * recordNb / (24 * 60))}d-${moment().format('MMM-D')}.js`
 let fetchKlineBlackList = []
 let numberOfPoints = 24 * 60 / intervalInMins
+if (numberOfPoints < Math.max(...windows)) {
+  throw new Error('numberOfPoints must be larger than the max value of windows')
+}
 let padding = Math.max(...windows)
 
 /**
@@ -46,8 +49,8 @@ let useVolAsCriteria = true // 是否用volume作为选币依据
 let isSimulation = true // 是否使用模拟模式
 let simuBalance = 1 // 初始 BTC Balance
 let simuTradingFee = 0.0005 // 交易费
-let simuDuration = 4 * 24 * 60 * 60 * 1000 // 模拟进行时长，单位为毫秒
-let simuEndTime = 1517157088910// 截止至什么时候 in epoch time，undefined默认为截止至当下
+let simuDuration = 1 * 24 * 60 * 60 * 1000 + numberOfPoints * intervalInMillesec // 模拟进行时长，单位为毫秒
+let simuEndTime = undefined // 截止至什么时候 in epoch time，undefined默认为截止至当下
 let simuTimeStepSize = 5 * 60 * 1000 // 模拟中每步的步长
 let PLOT_CSV_FILE = `./savedData/klines/plotCsv${isSimulation ? '-simulate' : ''}-${moment().format('MMM-D-h:mm')}.csv`
 /**
@@ -55,17 +58,13 @@ let PLOT_CSV_FILE = `./savedData/klines/plotCsv${isSimulation ? '-simulate' : ''
  * */
 let dynamicProfitList = [
   {
-    multiplier: 1.5,
-    percent: 70
+    multiplier: 1,
+    percent: 30
   },
   {
-    multiplier: 2,
-    percent: 20
+    multiplier: 3,
+    percent: 50
   },
-  {
-    multiplier: 3.5,
-    percent: 5
-  }
 ]
 
 module.exports = {

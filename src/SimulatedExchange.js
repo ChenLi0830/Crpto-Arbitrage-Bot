@@ -37,7 +37,7 @@ module.exports = class SimulatedExchange {
     this.startTime = this.endTime - simuDuration
     this.currentTime = undefined // 第一次_calcOhlcvMAsList时，初始化为第一组ohlcvMAsList数据对应的timeStamp
     this.stepSizeInMillesec = simuTimeStepSize
-    this.stepIndex = this.padding + this.numberOfPoints - 1 // 用来记录上一个currentTime对应在ohlcvMAsListSource的index是多少
+    this.stepIndex = this.numberOfPoints - 1 // 用来记录上一个currentTime对应在ohlcvMAsListSource的index是多少
     this.intervalInMillesec = intervalInMillesec
 
     this.symbols = []
@@ -71,7 +71,7 @@ module.exports = class SimulatedExchange {
     return this.ohlcvMAsListSource.map(ohlcvMAsSource => {
       let ohlcvMAs = {
         ...ohlcvMAsSource,
-        data: ohlcvMAsSource.data.slice(this.stepIndex + 1 - (this.numberOfPoints + this.padding), this.stepIndex + 1)
+        data: ohlcvMAsSource.data.slice(this.stepIndex + 1 - this.numberOfPoints, this.stepIndex + 1)
       }
       /**
        * 获得当前时间的ohlcv

@@ -243,6 +243,8 @@ async function testParamsInSimulation () {
   /**
    * 从SimulatedExchange外部获取数据源，好处是可以重复使用
    */
+  params.padding = 180 // maximum potential value of the windows in the loop below
+  
   let totalNumberOfPoints = Math.trunc(simuDuration / intervalInMillesec)
   let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}))
   await exchange.loadMarkets()
@@ -254,7 +256,7 @@ async function testParamsInSimulation () {
 
   let SimuParams = {
     numberOfPoints,
-    padding,
+    padding: params.padding,
     intervalInMillesec,
     ohlcvMAsListSource: dataSource
   }
@@ -266,7 +268,7 @@ async function testParamsInSimulation () {
   
   console.time('Simulation')
   let counter = 0
-  for (let window0 of [7, 8]) {
+  for (let window0 of [4, 5, 7, 8]) {
   for (let window1 of [16, 21, 25]) {
   for (let window2 of [99, 120, 150, 180]) {
   for (let dynamicProfit1 of [1, 2, 3, 4, 5]) {
@@ -296,8 +298,6 @@ async function testParamsInSimulation () {
       //   percent: dynamicPercent3
       // }
     ]
-    params.padding = Math.max(...windows)
-
     let simulatedExchange = new SimulatedExchange(
       exchangeId,
       simuBalance,
@@ -309,10 +309,9 @@ async function testParamsInSimulation () {
     )
     await simulatedExchange.initExchange()
 
+    checkMemory('debug')
     let manager = new Manager(simulatedExchange, credentials[exchangeId], params)
     let BTCResult = await manager.start()
-    manager = null
-    delete manager
 
     counter++
     if (BTCResult > bestBalance) {

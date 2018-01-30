@@ -196,8 +196,26 @@ module.exports = class Worker {
         return retryMutationTaskIfTimeout(this.exchange, 'createLimitSellOrder', [this.symbol, cutAmount, order.price, {'recvWindow': 60 * 10 * 1000}])
       })
 
-      let results = await Promise.all(recreateOrderPromises)
-      console.log('results', results)
+      let limitOrders = []
+      await Promise.all(recreateOrderPromises.map(async (recreateOrderPromise, i) => {
+        try {
+          let limitOrderResult = await recreateOrderPromise
+          console.log('limitOrderResult', limitOrderResult)
+          if (limitOrderResult && limitOrderResult.id) {
+            limitOrders.push({
+              id: limitOrderResult.id,
+              amount: limitOrderResult.amount
+            })
+          }
+        } catch (error) {
+          console.log(this.id, this.symbol, error)
+          log(`recreateLimitOrdersResult error, often because of not enough balance, ignored`.red)
+        }
+      }))
+
+      this.limitOrders = limitOrders
+      this.orderFilledAmount = 0
+
       log(`--- Finished task: Worker for ${this.symbol} finished recreating canceled orders\n`.green)
     } catch (error) {
       console.log(error)

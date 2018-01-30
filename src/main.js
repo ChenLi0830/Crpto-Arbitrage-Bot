@@ -55,6 +55,9 @@ let params = {
 
 async function main () {
   try {
+    if (isSimulation) {
+      throw new Error('isSimulation in config must be false to run in production')
+    }
     let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}, credentials[exchangeId]))
     let manager = new Manager(exchange, credentials[exchangeId], params)
     await manager.start()

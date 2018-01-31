@@ -180,9 +180,10 @@ module.exports = class Manager {
     /**
      * volumeWhiteListShort 排除掉黑名单及volumeWhiteListLong已经包括的部分
      */
-    volumeWhiteListShort = _.filter(volumeWhiteListShort, o => {
-      return volumeWhiteListLong.indexOf(o) === -1 && blackList.indexOf(o) === -1
-    }).slice(0, this.shortVolSymbolNo)
+    // volumeWhiteListShort = _.filter(volumeWhiteListShort, o => {
+    //   return volumeWhiteListLong.indexOf(o) === -1 && blackList.indexOf(o) === -1
+    // }).slice(0, this.shortVolSymbolNo)
+    volumeWhiteListShort = [] // 暂停掉volumeWhiteListShort，避免进入行情尾端
     /**
      * 生成最终白名单
      */

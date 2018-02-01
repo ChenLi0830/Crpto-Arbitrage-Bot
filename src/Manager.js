@@ -196,7 +196,8 @@ module.exports = class Manager {
   }
 
   klineMatchCriteria (ohlcvMAs) {
-    let klineIdx = ohlcvMAs.data.length - 1
+    // let klineIdx = ohlcvMAs.data.length - 1 // 用正在进行的k线来判断
+    let klineIdx = ohlcvMAs.data.length - 2 // 用已经完成的k线来判断
     /**
      * 检查 volume 条件
      */

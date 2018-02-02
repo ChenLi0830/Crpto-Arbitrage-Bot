@@ -181,7 +181,6 @@ module.exports = class Worker {
       /**
        * 找到最近创建的orders当两个order之间相差10秒，则视为同时下的order
        * */
-      console.log('fetchedOrders', fetchedOrders)
       fetchedOrders = _.filter(fetchedOrders, {type: 'limit', side: 'sell'}) // 只保留limit sell orders
       fetchedOrders = _.sortBy(fetchedOrders, order => -order.timestamp)
       let canceledOrders = _.filter(fetchedOrders, order => (fetchedOrders[0].timestamp - order.timestamp < 10 * 1000) && order.status === 'canceled')

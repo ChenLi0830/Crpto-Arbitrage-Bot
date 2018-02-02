@@ -364,9 +364,14 @@ async function main () {
     // await testWorker()
     // await testManager()
     // await testSimulatedExchange()
-    // await testSimulation()
-    // await testParamsInSimulation()
-    await testParamsInSimulationOverTime()
+    // await testParamsInSimulationOverTime()
+    if (isSimulation) {
+      await testSimulation()
+      await testParamsInSimulation()
+    } 
+    else {
+      throw new Error('isSimulation param must be true to run simulation')
+    }
   } catch (error) {
     console.log(error)
     console.log(error.stack)

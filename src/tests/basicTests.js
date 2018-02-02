@@ -9,9 +9,13 @@ const klineListGetDuringPeriod = require('../database/klineListGetDuringPeriod')
 const ccxt = require('ccxt')
 const fs = require('fs')
 const util = require('util')
-const {checkMemory} = require('../utils')
-
 const {
+  checkMemory,
+  retryMutationTaskIfTimeout
+} = require('../utils')
+const moment = require('moment')
+
+let {
   numberOfPoints,
   padding,
   windows,
@@ -247,7 +251,7 @@ async function testParamsInSimulation () {
   
   let totalNumberOfPoints = Math.trunc(simuDuration / intervalInMillesec) + params.padding
   let exchange = new ccxt[exchangeId](ccxt.extend({enableRateLimit: true}))
-  await exchange.loadMarkets()
+  await retryMutationTaskIfTimeout(exchange, 'loadMarkets', [])
   let symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
   
   console.time('LoadData')
@@ -263,27 +267,31 @@ async function testParamsInSimulation () {
 
   let bestBalance = 0
   let bestParams = {}
-
-  await api.sleep(1000)
   
   console.time('Simulation')
   let counter = 0
-  for (let window0 of [4, 5, 7, 8]) {
-  for (let window1 of [16, 21, 25]) {
-  for (let window2 of [99, 120, 150, 180]) {
-  for (let dynamicProfit1 of [1, 2, 3, 4, 5]) {
-  for (let dynamicProfit2 of [1, 2, 3, 4, 5]) {
-  // // for (let dynamicProfit3 of [1, 2, 3, 4, 5, 6, 7]) {
+  // for (let window0 of [4, 5, 7, 8, 9, 10]) {
+  // for (let window1 of [16, 21, 25]) {
+  // for (let window2 of [180, 99, 120, 150]) {
+  for (let window0 of [10]) {
+  for (let window1 of [25]) {
+  for (let window2 of [99]) {
+    if (window0 >= window1 || window1 >= window2) {
+      continue
+    }
+  for (let dynamicProfit1 of [1, 2, 3, 4, 5, 6]) {
+  for (let dynamicProfit2 of [1, 2, 3, 4, 5, 6]) {
+  // // // for (let dynamicProfit3 of [1, 2, 3, 4, 5, 6, 7]) {
   for (let dynamicPercent1 of [10, 30, 50, 70, 90]) {
   for (let dynamicPercent2 of [10, 30, 50, 70, 90]) {
-  // for (let dynamicPercent3 of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
+  // // // for (let dynamicPercent3 of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
+    params.windows = [window0, window1, window2]
     if (dynamicProfit1 >= dynamicProfit2 /* || dynamicProfit2 >= dynamicProfit3 */) {
       continue
     }
     if (dynamicPercent1 + dynamicPercent2 /* + dynamicPercent3 */ >= 100) {
       continue
     }
-    params.windows = [window0, window1, window2]
     params.dynamicProfitList = [
       {
         multiplier: dynamicProfit1,
@@ -333,13 +341,32 @@ async function testParamsInSimulation () {
   console.timeEnd('Simulation')
 }
 
+async function testParamsInSimulationOverTime () {
+  let overallSimulationDuration = 16 * 24 * 60 * 60 * 1000
+  durationInterval = 16 * 24 * 60 * 60 * 1000 // how long for each simulate
+  let initialEndTime = new Date().getTime() // Jan 31 10:00am
+  // let initialEndTime = 1517335213307 // Jan 30 10:00am
+  // let initialEndTime = 1516861379991 // Jan 25 10pm
+    // let initialEndTime = 1515306179991 // Jan 6 10pm
+  let counter = 0
+  let totalCount = Math.trunc(overallSimulationDuration / durationInterval)
+  while (counter < totalCount) {
+    simuEndTime = initialEndTime - (counter * durationInterval) // Jan 30 10:00am
+    simuDuration = durationInterval + numberOfPoints * intervalInMillesec
+    fs.appendFileSync(`./savedData/klines/bestParams-3.js`, `${moment(Number(simuEndTime) - durationInterval).format('MMMM Do YYYY, h:mm a')} - ${moment(Number(simuEndTime)).format('MMMM Do YYYY, h:mm a')}\n`, 'utf-8')
+    await testParamsInSimulation()
+    counter++
+  }
+}
+
 async function main () {
   try {
     // await testWorker()
     // await testManager()
     // await testSimulatedExchange()
     // await testSimulation()
-    await testParamsInSimulation()
+    // await testParamsInSimulation()
+    await testParamsInSimulationOverTime()
   } catch (error) {
     console.log(error)
     console.log(error.stack)

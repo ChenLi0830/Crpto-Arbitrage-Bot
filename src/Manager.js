@@ -198,6 +198,7 @@ module.exports = class Manager {
   klineMatchCriteria (ohlcvMAs) {
     // let klineIdx = ohlcvMAs.data.length - 1 // 用正在进行的k线来判断
     let klineIdx = ohlcvMAs.data.length - 2 // 用已经完成的k线来判断
+    let isKlineJustFinish = (new Date().getTime() - ohlcvMAs.data[klineIdx].timeStamp) < 45 * 1000
     /**
      * 检查 volume 条件
      */
@@ -218,7 +219,7 @@ module.exports = class Manager {
     let isKlineHigherThanPrevPoint = (ohlcvMAs.data[klineIdx].open >= ohlcvMAs.data[klineIdx - 1].open) && (ohlcvMAs.data[klineIdx].close >= ohlcvMAs.data[klineIdx - 1].close)
     let matchPriceCriteria = isFastMAGreater && isMiddleMAGreater && priceGreaterThanFastMA && isFastMAIncreasing && isMiddleMAIncreasing && isSlowMAIncreasing && isKlineHigherThanPrevPoint
 
-    return matchVolCriteria && matchPriceCriteria
+    return matchVolCriteria && matchPriceCriteria && isKlineJustFinish
   }
 
   /**

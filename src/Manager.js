@@ -198,7 +198,7 @@ module.exports = class Manager {
   klineMatchCriteria (ohlcvMAs) {
     // let klineIdx = ohlcvMAs.data.length - 1 // 用正在进行的k线来判断
     let klineIdx = ohlcvMAs.data.length - 2 // 用已经完成的k线来判断
-    let isKlineJustFinish = (new Date().getTime() - ohlcvMAs.data[klineIdx].timeStamp) < 45 * 1000
+    let isKlineJustFinish = (new Date().getTime() - ohlcvMAs.data[klineIdx + 1].timeStamp) < 45 * 1000
     /**
      * 检查 volume 条件
      */

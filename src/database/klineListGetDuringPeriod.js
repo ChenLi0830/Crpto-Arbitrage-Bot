@@ -89,11 +89,14 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
      */
     if (ohlcvList.length > 1 && ohlcvList[0].data.length === ohlcvList[1].data.length && ohlcvList[0].data.length < numberOfPoints) {
       numberOfPoints = ohlcvList[0].data.length
-      /**
-       * 去掉长度不够的币
-       */
-      ohlcvList = _.filter(ohlcvList, ohlcv => ohlcv.data && ohlcv.data.length >= numberOfPoints)
     }
+    else if (ohlcvList.length === 1) {
+      numberOfPoints = ohlcvList[0].data.length
+    }
+    /**
+     * 去掉长度不够的币
+     */
+    ohlcvList = _.filter(ohlcvList, ohlcv => ohlcv.data && ohlcv.data.length >= numberOfPoints)
     /**
      * 如果多获取了一个点，则截掉
      * */

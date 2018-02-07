@@ -106,6 +106,10 @@ module.exports = class Worker {
     let filledAmount = 0
     for (let limitOrder of this.limitOrders) {
       let currentOrderStatus = _.find(fetchedOrders, {id: limitOrder.id})
+      if (!currentOrderStatus) {
+        console.log('fetchedOrders', fetchedOrders)
+        console.log('limitOrder.id', limitOrder.id)
+      }
       if (currentOrderStatus.status === 'closed') { // 止盈order被filled了
         filledAmount += limitOrder.amount
       }

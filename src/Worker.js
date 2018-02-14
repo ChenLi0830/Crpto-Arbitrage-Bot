@@ -93,7 +93,7 @@ module.exports = class Worker {
   }
 
   /**
-   * 查看有多少orders被filled了，并更新this.filledAmount
+   * 查看有多少orders被filled了，并更新this.orderFilledAmount
    * @param {*} [fetchedOrders] // 如果没有定义，则会调用fetchOrders获得
    */
   async updateCutProfitFilledAmount (fetchedOrders) {
@@ -118,12 +118,12 @@ module.exports = class Worker {
       }
     }
     log(`Total filledAmount ${filledAmount}`)
-    this.filledAmount = filledAmount
+    this.orderFilledAmount = filledAmount
   }
 
   async updateRemainingBTCAmount () {
     await this.updateCutProfitFilledAmount()
-    this.remainingBTC = ((this.currencyAmount - this.filledAmount) / this.currencyAmount) * this.BTCAmount
+    this.remainingBTC = ((this.currencyAmount - this.orderFilledAmount) / this.currencyAmount) * this.BTCAmount
   }
 
   /**
@@ -173,9 +173,9 @@ module.exports = class Worker {
        * */
       let sellResult = await retryMutationTaskIfTimeout(this.exchange, 'createMarketSellOrder', [this.symbol, sellAmount, {'recvWindow': 60*10*1000}])
       log(`--- Selling Result`.blue, sellResult)
+      this.BTCAmount = targetBTCAmount ? this.BTCAmount - sellAmount * ohlcvMAs.data.slice(-1)[0].close : this.BTCAmount
+      this.currencyAmount = this.currencyAmount - sellAmount
     }
-    this.BTCAmount = targetBTCAmount ? this.BTCAmount - sellAmount * ohlcvMAs.data.slice(-1)[0].close : this.BTCAmount
-    this.currencyAmount = this.currencyAmount - sellAmount
   }
 
   async recreateCancelledProfitOrders () {
@@ -188,6 +188,7 @@ module.exports = class Worker {
       fetchedOrders = _.filter(fetchedOrders, {type: 'limit', side: 'sell'}) // 只保留limit sell orders
       fetchedOrders = _.sortBy(fetchedOrders, order => -order.timestamp)
       let canceledOrders = _.filter(fetchedOrders, order => (fetchedOrders[0].timestamp - order.timestamp < 10 * 1000) && order.status === 'canceled')
+      console.log('canceledOrders', canceledOrders)
       /**
        * 重建order
        */
@@ -195,7 +196,7 @@ module.exports = class Worker {
       let totalOrderAmount = canceledOrders.reduce((sum, order) => sum + order.amount, 0)
       let recreateOrderPromises = canceledOrders.map(order => {
         let orderPercent = (order.amount / totalOrderAmount) * limitOrderTotalPercent
-        let cutAmount = this.currencyAmount * orderPercent / 100
+        let cutAmount = (this.currencyAmount - this.orderFilledAmount) * orderPercent / 100
         return retryMutationTaskIfTimeout(this.exchange, 'createLimitSellOrder', [this.symbol, cutAmount, order.price, {'recvWindow': 60 * 10 * 1000}])
       })
 
@@ -219,7 +220,7 @@ module.exports = class Worker {
       this.limitOrders = limitOrders
       this.orderFilledAmount = 0
 
-      log(`--- Finished task: Worker for ${this.symbol} finished recreating canceled orders\n`.green)
+      log(`--- Finished task: Worker for ${this.symbol} finished recreating canceled orders ${this.limitOrders}\n`.green)
     } catch (error) {
       console.log(error)
     }

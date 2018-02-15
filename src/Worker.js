@@ -194,9 +194,11 @@ module.exports = class Worker {
        */
       let limitOrderTotalPercent = _.sumBy(this.dynamicProfitList, o => o.percent)
       let totalOrderAmount = canceledOrders.reduce((sum, order) => sum + order.amount, 0)
-      let recreateOrderPromises = canceledOrders.map(order => {
+      let targetCurrency = getTargetCurrencyFromSymbol(this.symbol)
+      let recreateOrderPromises = canceledOrders.map(async order => {
         let orderPercent = (order.amount / totalOrderAmount) * limitOrderTotalPercent
-        let cutAmount = (this.currencyAmount - this.orderFilledAmount) * orderPercent / 100
+        let targetBalance = (await retryQueryTaskIfAnyError(this.exchange, 'fetchBalance', [{'recvWindow': 60 * 10 * 1000}]))['free'][targetCurrency]
+        let cutAmount = targetBalance * orderPercent / 100
         return retryMutationTaskIfTimeout(this.exchange, 'createLimitSellOrder', [this.symbol, cutAmount, order.price, {'recvWindow': 60 * 10 * 1000}])
       })
 

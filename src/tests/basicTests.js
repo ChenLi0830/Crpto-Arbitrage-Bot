@@ -362,13 +362,13 @@ async function testParamsInSimulationOverTime () {
 async function main () {
   try {
     // await testWorker()
-    await testManager()
+    // await testManager()
     // await testSimulatedExchange()
     // await testParamsInSimulationOverTime()
-    // if (isSimulation) {
-    //   await testSimulation()
-    //   await testParamsInSimulation()
-    // } 
+    if (isSimulation) {
+      await testSimulation()
+      // await testParamsInSimulation()
+    }
     // else {
     //   throw new Error('isSimulation param must be true to run simulation')
     // }

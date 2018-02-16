@@ -296,5 +296,7 @@ module.exports = class SimulatedExchange {
     order.status = 'canceled'
     let targetCurrency = getTargetCurrencyFromSymbol(order.symbol)
     this.balance[targetCurrency] = this.balance[targetCurrency] + (order.amount - order.filled)
+
+    // return "{"symbol":"ETHBTC","origClientOrderId":"PgHpGziJe3pgz3hlRE63Lg","orderId":75845789,"clientOrderId":"dma8gRJysCu3GrP4GxGuXr"}"
   }
 }

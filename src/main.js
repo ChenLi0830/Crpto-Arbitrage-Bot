@@ -2,6 +2,7 @@ const credentials = require('../credentials')
 const Manager = require('./Manager')
 const config = require('./config')
 const ccxt = require('ccxt')
+const player = require('play-sound')()
 const {
   numberOfPoints,
   padding,
@@ -64,6 +65,9 @@ async function main () {
   }
   catch (error) {
     console.log(error)
+    player.play('./src/Sosumi.aiff', (err) => {
+      if (err) throw err
+    })
   }
 }
 

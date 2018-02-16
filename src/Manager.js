@@ -11,6 +11,7 @@ const {MinorError, MajorError} = require('./utils/errors')
 const utils = require('./utils')
 const Worker = require('./Worker')
 const uuid = require('uuid/v4')
+const player = require('play-sound')()
 
 const {
   retryQueryTaskIfAnyError,
@@ -536,6 +537,9 @@ module.exports = class Manager {
         // checkMemory()
       } catch (error) {
         console.log('Major error', error)
+        player.play('./src/Sosumi.aiff', (err) => {
+          if (err) throw err
+        })
         break
       }
     }

@@ -225,6 +225,9 @@ module.exports = class Worker {
       log(`--- Finished task: Worker for ${this.symbol} finished recreating canceled orders ${this.limitOrders}\n`.green)
     } catch (error) {
       console.log(error)
+      this.player.play('./src/Sosumi.aiff', (err) => {
+        if (err) throw err
+      })
     }
   }
 
@@ -269,6 +272,9 @@ module.exports = class Worker {
       log(`--- Finished task: Worker for ${this.symbol} finished creating limit orders ${JSON.stringify(limitOrders)}\n`.green)
     } catch (error) {
       console.log(error)
+      this.player.play('./src/Sosumi.aiff', (err) => {
+        if (err) throw err
+      })
     }
   }
 

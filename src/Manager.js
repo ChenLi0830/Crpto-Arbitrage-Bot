@@ -100,12 +100,18 @@ module.exports = class Manager {
           break
         } catch (error) {
           console.log('Reading config file Error')
+          player.play('./src/Sosumi.aiff', (err) => {
+            if (err) throw err
+          })
         }
       }
       this.updateParams(config)
     }
     catch (error) {
       console.log(error)
+      player.play('./src/Sosumi.aiff', (err) => {
+        if (err) throw err
+      })
     }
   }
 
@@ -364,6 +370,9 @@ module.exports = class Manager {
       await Promise.all(buySymbolPromises)
     } catch (error) {
       console.log(error)
+      player.play('./src/Sosumi.aiff', (err) => {
+        if (err) throw err
+      })
     }
   }
 

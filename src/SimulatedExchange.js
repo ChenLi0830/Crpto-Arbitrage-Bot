@@ -9,6 +9,7 @@ const {
   getTargetCurrencyFromSymbol,
   saveJsonToCSV
 } = require('./utils')
+const {pairList} = require('./config')
 
 module.exports = class SimulatedExchange {
   constructor (
@@ -95,7 +96,8 @@ module.exports = class SimulatedExchange {
   async initExchange () {
     let exchange = new ccxt[this.exchangeId](ccxt.extend({enableRateLimit: true}))
     await exchange.loadMarkets()
-    this.symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
+    // this.symbols = _.filter(exchange.symbols, symbol => symbol.endsWith('BTC'))
+    this.symbols = pairList
     this.markets = exchange.markets
     /**
      * 如果创建实例时没有获得ohlcvMAsListSource，则在此时获取整个时间段内，需要的数据

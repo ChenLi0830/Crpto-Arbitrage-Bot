@@ -23,6 +23,10 @@ const {
   calcContinuousKlineIncrease
 } = utils
 
+const {
+  pairList
+} = require('./config')
+
 const klineListGetDuringPeriod = require('./database/klineListGetDuringPeriod')
 
 module.exports = class Manager {
@@ -163,7 +167,8 @@ module.exports = class Manager {
        */
       if (!this.ohlcvMAsList || !this.ohlcvMAsList.length) {
         await this.exchange.loadMarkets()
-        let symbols = _.filter(this.exchange.symbols, symbol => symbol.endsWith('BTC'))
+        // let symbols = _.filter(this.exchange.symbols, symbol => symbol.endsWith('BTC'))
+        let symbols = pairList
         ohlcvList = await klineListGetDuringPeriod(this.exchangeId, symbols, this.numberOfPoints + this.padding)
       }
       /**

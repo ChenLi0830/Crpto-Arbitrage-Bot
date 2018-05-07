@@ -33,7 +33,7 @@ let padding = Math.max(...windows)
 //  ]
 let exchangeId = 'binance'
 let whiteList = []
-let blackList = ['ETH/BTC', 'BNB/BTC']
+let blackList = ['BNB/BTC']
 let longVolSymbolNo = 10 // 用长期vol选多少个候选币
 let shortVolSymbolNo = 2 // 用短期vol选多少个候选币
 let longVolWindow = 24 * 60 / 5 // 长期vol window是多长
@@ -46,25 +46,49 @@ let volWindow = 48 // volume均线的window
 let buyLimitInBTC = 1 // 最多每个worker花多少BTC买币
 let useLockProfit = false // 是否开启止盈保本
 let useVolAsCriteria = true // 是否用volume作为选币依据
-let isSimulation = false // 是否使用模拟模式
+let isSimulation = true // 是否使用模拟模式
 let simuBalance = 1 // 初始 BTC Balance
 let simuTradingFee = 0.0005 // 交易费
-let simuDuration = 1 * 24 * 60 * 60 * 1000 + numberOfPoints * intervalInMillesec // 模拟进行时长，单位为毫秒
+let simuDuration = 7 * 24 * 60 * 60 * 1000 + numberOfPoints * intervalInMillesec // 模拟进行时长，单位为毫秒
 let simuEndTime = undefined // 截止至什么时候 in epoch time，undefined默认为截止至当下
 let simuTimeStepSize = 5 * 60 * 1000 // 模拟中每步的步长
 let PLOT_CSV_FILE = `./savedData/klines/plotCsv${isSimulation ? '-simulate' : ''}-${moment().format('MMM-D-h:mm')}.csv`
+
 /**
  * 止盈点
  * */
 let dynamicProfitList = [
-  {
-    multiplier: 1,
-    percent: 30
-  },
-  {
-    multiplier: 3,
-    percent: 50
-  },
+  // {
+  //   multiplier: 1,
+  //   percent: 30
+  // },
+  // {
+  //   multiplier: 3,
+  //   percent: 50
+  // },
+]
+
+let pairList = [
+  'ETH/BTC',
+  'EOS/BTC',
+  // 'BCH/BTC',
+  'TRX/BTC',
+  'ETC/BTC',
+  'ONT/BTC',
+  'XRP/BTC',
+  'LTC/BTC',
+  'NEO/BTC',
+  'ZIL/BTC',
+  'ADA/BTC',
+  'BNB/BTC',
+  'IOTA/BTC',
+  'NANO/BTC',
+  'XVG/BTC',
+  'CLOAK/BTC',
+  'ICX/BTC',
+  'IOST/BTC',
+  'ELF/BTC',
+  'NCASH/BTC'
 ]
 
 module.exports = {
@@ -105,5 +129,6 @@ module.exports = {
   simuTradingFee,
   simuDuration,
   simuEndTime,
-  simuTimeStepSize
+  simuTimeStepSize,
+  pairList
 }

@@ -87,10 +87,8 @@ async function klineListGetDuringPeriod (exchangeId, symbols, numberOfPoints, en
     /**
      * Update numberOfPoints in case exchange lost part of the data
      */
-    let bcdOhlcv = _.find(ohlcvList, ohlcv => ohlcv.symbol === 'BCD/BTC')
-    let adxOhlcv = _.find(ohlcvList, ohlcv => ohlcv.symbol === 'ADX/BTC')
-    if (ohlcvList.length > 1 && bcdOhlcv.data.length === adxOhlcv.data.length && bcdOhlcv.data.length < numberOfPoints) {
-      numberOfPoints = bcdOhlcv.data.length
+    if (ohlcvList.length > 1) {
+      numberOfPoints = ohlcvList[0].data.length
     }
     else if (ohlcvList.length === 1) {
       numberOfPoints = ohlcvList[0].data.length
